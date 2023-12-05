@@ -1,1 +1,3 @@
-/v
+/__pycache__
+/.idea
+*.ini
