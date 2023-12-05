@@ -10,7 +10,7 @@ class WCSPH(SPHBase):
         self.exponent = 7.0
         self.stiffness = 50.0
 
-        self.d_velocity = ti.Vector(self.ps.dim, dtype=float)
+        self.d_velocity = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
         particle_node.place(self.d_velocity)
 
@@ -32,30 +32,32 @@ class WCSPH(SPHBase):
         for p_i in range(self.ps.particle_num[None]):
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             # wcsph 的关键
-            self.ps.pressure[p_i] = self.stiffness * (
-                    ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
+            self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
 
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            d_v[self.ps.dim - 1] = const.g
-            for j in range(self.ps.particle_num[None]):
-                p_j = self.ps.particle_num[j]
-                d_v += self.pressure_force(p_i, p_i, self.ps.x[p_i] - self.ps.x[p_j])
+            for j in range(self.ps.particle_neighbors_num[p_i]):
+                p_j = self.ps.particle_neighbors[p_i, j]
+                d_v += self.pressure_force(p_i, p_j, self.ps.x[p_i] - self.ps.x[p_j])
             self.d_velocity[p_i] += d_v
 
     # 计算粘性力以及加速度
     @ti.kernel
     def compute_non_pressure_force(self):
         for p_i in range(self.ps.particle_num[None]):
+            x_i = self.ps.x[p_i]
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            for j in range(self.ps.particle_num[None]):
-                p_j = self.ps.particle_num[j]
-                d_v += self.viscosity_force(p_i)
-            self.d_velocity[p_i] += d_v
+            d_v[self.ps.dim - 1] = const.g
+
+            for j in range(self.ps.particle_neighbors_num[p_i]):
+                p_j = self.ps.particle_neighbors[p_i, j]
+                x_j = self.ps.x[p_j]
+                d_v += self.viscosity_force(p_i, p_j, x_i - x_j)
+            self.d_velocity[p_i] = d_v
 
     @ti.kernel
     def advert(self):
@@ -64,9 +66,9 @@ class WCSPH(SPHBase):
                 self.ps.v[p_i] += self.dt[None] * self.d_velocity[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
 
-
     def substep(self):
         self.compute_densities()
         self.compute_non_pressure_force()
         self.compute_pressure_force()
         self.advert()
+
