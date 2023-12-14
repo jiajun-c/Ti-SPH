@@ -1,6 +1,6 @@
 # Ti-SPH
 
-This is the graducation design of me.
+This is my graduation project
 
 ## 1. Project structure
 
@@ -12,5 +12,19 @@ This is the graducation design of me.
 
 ### 2.1 the wcsph
 
-### 2.1 The boundary handler 
+### 2.1 The boundary handler
 
+## 3. Render
+
+### 3.1 Ball pivoting algorithm
+
+Using the bpa algorithm to render the points.
+
+> This example render the points in a circle.
+![2d](./assert/bpa.png)
+
+To run this example.
+
+```shell
+python ./render/bpa/d2.py
+```
