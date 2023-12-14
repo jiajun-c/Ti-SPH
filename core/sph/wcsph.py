@@ -1,7 +1,7 @@
 import taichi as ti
 
 import const
-from sph_base import SPHBase
+from sph.sph_base import SPHBase
 
 
 class WCSPH(SPHBase):

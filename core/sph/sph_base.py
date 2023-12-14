@@ -1,6 +1,6 @@
 import taichi as ti
 import numpy as np
-from partice_system import ParticleSystem
+from partice_system.partice_system import ParticleSystem
 import const
 
 
@@ -10,7 +10,7 @@ class SPHBase:
     def __init__(self, particle_system: ParticleSystem):
         self.ps = particle_system  # 微分系统
         self.viscosity = 0.05  # 粘性系数
-        self.density_0 = 1000.0  # 水的密度
+        self.density_0 = 1000.0  # 水 的密度
         self.dt = ti.field(float, shape=())
         self.dt[None] = 2e-4
         self.mass = self.ps.m_V * self.density_0  # 单位体积内的质量
@@ -108,7 +108,18 @@ class SPHBase:
                     self.simulate_collisions(
                         p_i, ti.Vector([0.0, 1.0]),
                         self.ps.padding - pos[1])
-
+    @ti.func
+    def enforce_boundary_3D(self):
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                pos = self.ps.x[p_i]
+                if pos[0] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([1.0, 0.0, 0.0]),
+                        self.ps.padding - pos[0])
+                
+                    
+    
     @ti.kernel
     def enforce_boundary(self):
         if self.ps.dim == 2:

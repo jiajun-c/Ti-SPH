@@ -1,9 +1,9 @@
 import taichi as ti
 import numpy as np
-from partice_system import ParticleSystem
-from wcsph import WCSPH
+from partice_system.partice_system import ParticleSystem
+from sph.wcsph import WCSPH
 
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.gpu)
 
 if __name__ == "__main__":
     ps = ParticleSystem((512, 512))

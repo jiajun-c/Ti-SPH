@@ -8,3 +8,9 @@ This is the graducation design of me.
 - render: render the result from the coe
 - data: the core input
 
+## 2. The sph method
+
+### 2.1 the wcsph
+
+### 2.1 The boundary handler 
+
