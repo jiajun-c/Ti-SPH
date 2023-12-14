@@ -93,15 +93,23 @@ class BPA:
         return ti.math.vec2(nextIndex, nextTheta)
     
     @ti.func
-    def update_circle_pos(self, circle_pos, center_pos, theta) -> ti.math.vec2:
-        """更新原点的信息
+    def update_circle_pos(self, start_point, end_point) -> ti.math.vec2:
+        """更新圆点的信息
+
         Args:
-            circle_pos (_type_): _description_
-            center_pos (_type_): _description_
+            start_point (_type_): _description_
+            end_point (_type_): _description_
+
+        Returns:
+            ti.math.vec2: 更新后圆点的位置
         """
-        newx = (circle_pos[0] - center_pos[0])*ti.cos(theta/ti.math.pi) - (circle_pos[1] - center_pos[1])*ti.sin(theta/ti.math.pi) 
-        newy = (circle_pos[0] - center_pos[0])*ti.sin(theta/ti.math.pi) - (circle_pos[1] - center_pos[1])*ti.cos(theta/ti.math.pi) 
-        return ti.math.vec2(newx, newy)
+        baseVec = ti.math.vec2(end_point[0] - start_point[0], end_point[1] - start_point[1])
+        theta = ti.math.atan2(baseVec[1], baseVec[0]) + 1/2
+        midpoint = [(start_point[0] + end_point[0])/2, (start_point[1] + end_point[1])/2]
+        mid_distance_square = (end_point[0] - start_point[0])**2 + (end_point[1] - start_point[1])**2
+        # 新的圆心到边缘线的垂直距离
+        distance = ti.math.sqrt(self.radius**2 - mid_distance_square)
+        return ti.math.vec2(midpoint[0] + distance*ti.math.cos(theta), midpoint[1] + distance*ti.math.sin(theta))
     
     @ti.func
     def render_signle_group(self, index):
@@ -120,9 +128,9 @@ class BPA:
         circle_pos = ti.math.vec2(self.points[next][0], self.points[next][1] + self.radius)
         while True:
             ans = self.get_next_point(index, next, circle_pos)
-            circle_pos = self.update_circle_pos(circle_pos, self.points[next], ans[1])
             if ans[0] == -1:
                 break
+            circle_pos = self.update_circle_pos(self.points[next], self.points[ti.i32(ans[0])])
             next = ans[0]
             print("next ", self.points[next])
             self.edge.append(next)
@@ -136,34 +144,32 @@ class BPA:
         
         # self.get_neighbors()
         
-num_rows = np.random.randint(50, 101)
-num_cols = np.random.randint(50, 101)
-random_array = np.random.rand(100, 2)
-arr = random_array*(100 - 50) + 50
-x = arr[:, 0]
-y = arr[:, 1]
-plt.scatter(x, y, marker='o', s=50, alpha=0.7, edgecolors='k')
-plt.show()
-# arr = np.array([[100, 50], [50, 100], [50, 50], [100, 100], [50, 200]])
+
+# random_array = np.random.rand(100, 2)
+# arr = random_array*(100 - 50) + 50
+# x = arr[:, 0]
+# y = arr[:, 1]
+# plt.scatter(x, y, marker='o', s=50, alpha=0.7, edgecolors='k')
+# plt.show()
+arr = np.array([[80.0, 50.0], [75.98076211353316, 65.0], [65.0, 75.98076211353316], [50.0, 80.0], [35.00000000000001, 75.98076211353316], [24.01923788646684, 65.0], [20.0, 50.00000000000001], [24.019237886466836, 35.00000000000001], [34.999999999999986, 24.019237886466847], [49.99999999999999, 20.0], [65.0, 24.019237886466843], [75.98076211353316, 34.999999999999986]])
 bpa = BPA(arr, 50)
 bpa.render()
 edge_count = bpa.edge_count[0]
-
+print("edge_count: ", edge_count)
 gui = ti.GUI("bpa", res=(400, 400))
 result = np.zeros(shape=(edge_count,2))
 for i in range(edge_count):
-    insert = (1, 1)
     result[i] = arr[bpa.edge[i]]
+    
     # result = np.append(result, insert)
-base = arr[bpa.edge[0]]
-# edge_count-=1
+base = result[0]
 first = np.array([base for _ in range(0, edge_count-2)])
 second =  np.array([result[i] for i in range(1, edge_count-1)])
 third = np.array([result[i] for i in range(2, edge_count)])
-print("first", first)
-print("second", second)
-print("third",third)
-print(result)
+# print("first", first)
+# print("second", second)
+# print("third",third)
+# print(result)
 while gui.running:
     # gui.circles(arr/500, radius=10, palette=[0x068587], palette_indices=[0, 0, 0, 0])
 
