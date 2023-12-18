@@ -20,12 +20,11 @@ class ParticleSystem:
         self.particle_radius = 0.05  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
-        self.m_V = 0.8 * self.particle_diameter ** self.dim
+        self.m_V = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.particle_max_num = 2 ** 15
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
-
         # 网格相关属性
         self.grid_size = self.support_radius
         self.grid_num = np.ceil(np.array(res) / self.grid_size).astype(int)
@@ -43,9 +42,10 @@ class ParticleSystem:
         self.color = ti.field(dtype=int)
         self.particle_neighbors = ti.field(int)
         self.particle_neighbors_num = ti.field(int)
+        self.volume = ti.field(dtype=ti.f32)
 
         self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
-        self.particles_node.place(self.x, self.v, self.density, self.pressure, self.material, self.color)
+        self.particles_node.place(self.x, self.v, self.density, self.pressure, self.material, self.color, self.volume)
         self.particles_node.place(self.particle_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
         self.particle_node.place(self.particle_neighbors)
@@ -119,7 +119,11 @@ class ParticleSystem:
                     self.particle_neighbors[p_i, cnt] = p_j
                     cnt += 1
             self.particle_neighbors_num[p_i] = cnt
-
+    @ti.kernel
+    def for_all_neighbors(self, idx_i, task: ti.template(), ret: ti.template()):
+        for idx_j in range(self.particle_neighbors_num[None]):
+            task(idx_i, idx_j, task, ret)
+    
     @ti.kernel
     def allocate_particles_to_grid(self):
         for i in range(self.particle_num[None]):

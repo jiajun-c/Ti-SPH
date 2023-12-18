@@ -23,7 +23,10 @@ class WCSPH(SPHBase):
             for j in range(self.ps.particle_neighbors_num[p_i]):
                 p_j = self.ps.particle_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
-                self.ps.density[p_i] += self.ps.m_V * self.cubic_kernel((x_i - x_j).norm())
+                if self.ps.material[p_j] == self.ps.material_fluid:
+                    self.ps.density[p_i] += self.ps.m_V * self.cubic_kernel((x_i - x_j).norm())
+                elif self.ps.material[p_j] == self.ps.material_boundary:
+                    self.ps.density[p_i] += self.density_0*self.ps.volume[p_j] * self.cubic_kernel((x_i - x_j).norm)
             self.ps.density[p_i] *= self.density_0
 
     # 计算压力以及加速度(包括重力作用）

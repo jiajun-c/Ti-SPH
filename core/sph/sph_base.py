@@ -62,9 +62,14 @@ class SPHBase:
     # 液体的压力
     @ti.func
     def pressure_force(self, p_i, p_j, r):
-        res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
+        res = 0
+        p_rho_i = self.ps.pressure[p_i] / (self.ps.density[p_i] ** 2)
+        if self.ps.material[p_j] == self.ps.material_fluid:
+            res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
                                                + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
               * self.cubic_kernel_derivative(r)
+        elif self.ps.material[p_j] == self.ps.material_boundary:
+            res = -self.density_0*self.ps.v[p_j] * p_rho_i * self.cubic_kernel_derivative(r)
         return res
 
     # 液体的粘性力
@@ -117,8 +122,20 @@ class SPHBase:
                     self.simulate_collisions(
                         p_i, ti.Vector([1.0, 0.0, 0.0]),
                         self.ps.padding - pos[0])
-                
-                    
+    
+    @ti.func
+    def compute_boundary_volume_task(self, p_i, p_j, delta_bi):
+        if self.ps.material[p_j] == self.ps.material_boundary:
+            delta_bi += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
+
+    @ti.func
+    def compute_volume_of_boundary_particle(self):
+        for i in range(self.ps.particle_num[None]):
+            if self.ps.material[i] == self.ps.material_boundary:
+                delta_bi = self.cubic_kernel(0.0)
+                self.ps.for_all_neighbors(i, self.compute_boundary_volume_task, delta_bi)
+                self.ps.volume[i] = 1.0/ delta_bi
+
     
     @ti.kernel
     def enforce_boundary(self):
@@ -127,5 +144,7 @@ class SPHBase:
 
     def step(self):
         self.ps.init()
+        # TODO: This task only need to be run once
+        self.compute_volume_of_boundary_particle()
         self.substep()
         self.enforce_boundary()
