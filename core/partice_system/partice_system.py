@@ -69,12 +69,12 @@ class ParticleSystem:
 
     @ti.kernel
     def add_particles(self, num: int,
-                      particle_position: ti.types.ndarray(),
-                      particle_velocity: ti.types.ndarray(),
-                      particle_density: ti.types.ndarray(),
-                      particle_pressure: ti.types.ndarray(),
-                      particle_material: ti.types.ndarray(),
-                      particle_color: ti.types.ndarray()):
+                    particle_position: ti.types.ndarray(),
+                    particle_velocity: ti.types.ndarray(),
+                    particle_density: ti.types.ndarray(),
+                    particle_pressure: ti.types.ndarray(),
+                    particle_material: ti.types.ndarray(),
+                    particle_color: ti.types.ndarray()):
         for i in range(num):
             v = ti.Vector.zero(float, self.dim)
             x = ti.Vector.zero(float, self.dim)
@@ -82,10 +82,10 @@ class ParticleSystem:
                 v[j] = particle_velocity[i, j]
                 x[j] = particle_position[i, j]
             self.add_particle(self.particle_num[None] + i, x, v,
-                              particle_density[i],
-                              particle_pressure[i],
-                              particle_material[i],
-                              particle_color[i])
+                            particle_density[i],
+                            particle_pressure[i],
+                            particle_material[i],
+                            particle_color[i])
         self.particle_num[None] += num
 
     @ti.func
@@ -119,10 +119,10 @@ class ParticleSystem:
                     self.particle_neighbors[p_i, cnt] = p_j
                     cnt += 1
             self.particle_neighbors_num[p_i] = cnt
-    @ti.kernel
+    @ti.func
     def for_all_neighbors(self, idx_i, task: ti.template(), ret: ti.template()):
-        for idx_j in range(self.particle_neighbors_num[None]):
-            task(idx_i, idx_j, task, ret)
+        for idx_j in range(self.particle_neighbors_num[idx_i]):
+            task(idx_i, idx_j, ret)
     
     @ti.kernel
     def allocate_particles_to_grid(self):
@@ -132,27 +132,27 @@ class ParticleSystem:
             self.grid_particles[cell, offset] = i
 
     def add_cube(self,
-                 lower_corner,
-                 cube_size,
-                 material,
-                 color=0xFFFFFF,
-                 density=None,
-                 pressure=None,
-                 velocity=None):
+                lower_corner,
+                cube_size,
+                material,
+                color=0xFFFFFF,
+                density=None,
+                pressure=None,
+                velocity=None):
 
         num_dim = []
         for i in range(self.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
-                          self.particle_radius))
+                            self.particle_radius))
         num_new_particles = reduce(lambda x, y: x * y,
-                                   [len(n) for n in num_dim])
+                                    [len(n) for n in num_dim])
         assert self.particle_num[None] + num_new_particles <= self.particle_max_num
 
         positions = np.array(np.meshgrid(*num_dim,
-                                         sparse=False,
-                                         indexing='ij'),
-                             dtype=np.float32)
+                                        sparse=False,
+                                        indexing='ij'),
+                            dtype=np.float32)
         positions = positions.reshape(-1,
                                       reduce(lambda x, y: x * y, list(positions.shape[1:]))).transpose()
         print("new position shape ", positions.shape)

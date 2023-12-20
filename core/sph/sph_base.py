@@ -62,7 +62,8 @@ class SPHBase:
     # 液体的压力
     @ti.func
     def pressure_force(self, p_i, p_j, r):
-        res = 0
+        # support 2D only now
+        res = ti.Vector([0.0, 0.0])
         p_rho_i = self.ps.pressure[p_i] / (self.ps.density[p_i] ** 2)
         if self.ps.material[p_j] == self.ps.material_fluid:
             res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
@@ -128,7 +129,7 @@ class SPHBase:
         if self.ps.material[p_j] == self.ps.material_boundary:
             delta_bi += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
 
-    @ti.func
+    @ti.kernel
     def compute_volume_of_boundary_particle(self):
         for i in range(self.ps.particle_num[None]):
             if self.ps.material[i] == self.ps.material_boundary:
@@ -144,7 +145,6 @@ class SPHBase:
 
     def step(self):
         self.ps.init()
-        # TODO: This task only need to be run once
         self.compute_volume_of_boundary_particle()
         self.substep()
         self.enforce_boundary()
