@@ -16,7 +16,7 @@ class ParticleSystemV2:
         # 材料相关性质
         self.material_boundary = 0
         self.material_fluid = 1
-
+        self.simulation_config = simulation_config
         # 粒子相关信息
         self.particle_radius = 0.05  # particle radius
         self.particle_diameter = 2 * self.particle_radius
@@ -34,11 +34,11 @@ class ParticleSystemV2:
         self.grid_particles = ti.field(int)
         self.padding = self.grid_size
         # 模拟的配置
-        self.config = self.simulation_config['Configuration']
+        self.config = self.simulation_config['configuration']
         
         # 固体
-        self.rigidBodiesConfig = self.simulation_config['RigidBodies']  # list
-        self.fluidBlocksConfig = self.simulation_config['FluidBlocks']  # list
+        self.rigidBodiesConfig = self.simulation_config['rigidBodies']  # list
+        self.fluidBlocksConfig = self.simulation_config['fluidBlocks']  # list
 
         # Snode数据结构
         self.x = ti.Vector.field(self.dim, dtype=float)
@@ -46,7 +46,7 @@ class ParticleSystemV2:
         self.density = ti.field(dtype=float)
         self.pressure = ti.field(dtype=float)
         self.material = ti.field(dtype=int)
-        self.color = ti.field(dtype=int)
+        self.color = ti.Vector.field(3, dtype=float)
         self.particle_neighbors = ti.field(int)
         self.particle_neighbors_num = ti.field(int)
         self.volume = ti.field(dtype=ti.f32)
@@ -81,7 +81,7 @@ class ParticleSystemV2:
         mesh.apply_transform(rot_matrix)
         mesh.vertices += offset
         rigid_body['mesh'] = mesh.copy()
-        self.get_mesh_info(mesh)
+        # self.get_mesh_info(mesh)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
         return voxelized_mesh.points.astype(np.float32)
         
@@ -101,13 +101,14 @@ class ParticleSystemV2:
             color = rigid['color']
             if type(color[0]) == int:
                 color = [c / 255.0 for c in color]
-            color=np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
+            color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
+            velocity = rigid['velocity']
             velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
             
             density = rigid['density']
             density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
 
-            pressure = np.full_like(np.zeros(particle_num), pressure if pressure is not None else 0.)
+            pressure = np.full_like(np.zeros(particle_num), 0.)
 
             positions = voxelized_points
             self.add_particles(particle_num, 
@@ -125,8 +126,9 @@ class ParticleSystemV2:
             velocity = fluid['velocity']
             color = fluid['color']
             density = fluid['density']
+            cube_size = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
             self.add_cube(lower_corner=start, 
-                        cube_size= end-start, 
+                        cube_size=cube_size, 
                         material= self.material_fluid,
                         color= color,
                         density=density,
@@ -139,7 +141,7 @@ class ParticleSystemV2:
         self.density[p] = density
         self.pressure[p] = pressure
         self.material[p] = material
-        self.color[p] = color
+        # self.color[p] = color
 
     @ti.kernel
     def add_particles(self, num: int,
@@ -152,14 +154,16 @@ class ParticleSystemV2:
         for i in range(num):
             v = ti.Vector.zero(float, self.dim)
             x = ti.Vector.zero(float, self.dim)
+            color = ti.Vector.zero(float, self.dim)
             for j in ti.static(range(self.dim)):
                 v[j] = particle_velocity[i, j]
                 x[j] = particle_position[i, j]
+                color[j] = particle_color[i, j]
             self.add_particle(self.particle_num[None] + i, x, v,
                             particle_density[i],
                             particle_pressure[i],
                             particle_material[i],
-                            particle_color[i])
+                            color)
         self.particle_num[None] += num
 
     @ti.func

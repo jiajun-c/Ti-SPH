@@ -1,7 +1,7 @@
 import taichi as ti
 import numpy as np
-from partice_system.partice_system import ParticleSystem
-import const
+from core.partice_system.partice_system import ParticleSystem
+import core.const
 
 
 @ti.data_oriented
