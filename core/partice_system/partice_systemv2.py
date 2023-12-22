@@ -1,11 +1,12 @@
 import taichi as ti
 import numpy as np
+import trimesh as trim
 from functools import reduce
 
 
 @ti.data_oriented
-class ParticleSystem:
-    def __init__(self, res):
+class ParticleSystemV2:
+    def __init__(self, res, simulation_config):
         self.res = res
         self.dim = len(res)
         assert self.dim > 1
@@ -32,6 +33,12 @@ class ParticleSystem:
         self.grid_particles_num = ti.field(int)
         self.grid_particles = ti.field(int)
         self.padding = self.grid_size
+        # 模拟的配置
+        self.config = self.simulation_config['Configuration']
+        
+        # 固体
+        self.rigidBodiesConfig = self.simulation_config['RigidBodies']  # list
+        self.fluidBlocksConfig = self.simulation_config['FluidBlocks']  # list
 
         # Snode数据结构
         self.x = ti.Vector.field(self.dim, dtype=float)
@@ -58,6 +65,73 @@ class ParticleSystem:
         cell_node = grid_node.dense(cell_index, self.particle_max_num_per_cell)
         cell_node.place(self.grid_particles)
 
+    def load_rigid_body(self, rigid_body):
+        """load the rigid body
+
+        Args:
+            rigid_body (json): the configuration of the rigid body
+        """
+        # the mesh only contains the surface information
+        mesh = trim.load(rigid_body['geometryFile'])
+        mesh.apply_scale(rigid_body['scale'])
+        offset = np.array(rigid_body['translation'])
+        rotation_angle = rigid_body['rotationAngle'] * np.pi / 180
+        rotation_axis = rigid_body['rotationAxis']
+        rot_matrix = trim.transformations.rotation_matrix(rotation_angle, rotation_axis, mesh.vertices.mean(axis=0))
+        mesh.apply_transform(rot_matrix)
+        mesh.vertices += offset
+        rigid_body['mesh'] = mesh.copy()
+        self.get_mesh_info(mesh)
+        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
+        return voxelized_mesh.points.astype(np.float32)
+        
+    def add_fluid_and_rigid(self):
+        """add fluid and rigid body declared in the configuration file
+        """
+        
+        # add rigid body
+        for rigid in self.rigidBodiesConfig:
+            voxelized_points = self.load_rigid_body(rigid)
+            particle_num = voxelized_points.shape[0]
+            self.particle_num[None] += particle_num
+            rigid['partice_num'] = particle_num
+            rigid['voxelized_points'] = voxelized_points
+            # TODO: add the material type for the rigid body instead of the boundary material
+            material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
+            color = rigid['color']
+            if type(color[0]) == int:
+                color = [c / 255.0 for c in color]
+            color=np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
+            velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
+            
+            density = rigid['density']
+            density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
+
+            pressure = np.full_like(np.zeros(particle_num), pressure if pressure is not None else 0.)
+
+            positions = voxelized_points
+            self.add_particles(particle_num, 
+                            positions,
+                            velocity,
+                            density,
+                            pressure,
+                            material,
+                            color)
+            
+        # add fluid blocks
+        for fluid in self.fluidBlocksConfig:
+            start = fluid['start']
+            end = fluid['end']
+            velocity = fluid['velocity']
+            color = fluid['color']
+            density = fluid['density']
+            self.add_cube(lower_corner=start, 
+                        cube_size= end-start, 
+                        material= self.material_fluid,
+                        color= color,
+                        density=density,
+                        velocity=velocity)
+        
     @ti.func
     def add_particle(self, p, x, v, density, pressure, material, color):
         self.x[p] = x
