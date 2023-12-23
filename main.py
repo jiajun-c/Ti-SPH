@@ -2,7 +2,7 @@ import taichi as ti
 import json
 from core.partice_system import partice_systemv2
 from core.sph.wcsph import WCSPH
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cpu)
 
 if __name__ == "__main__":
     with open("./data/scenes/demo.json", "r") as f:
@@ -14,4 +14,11 @@ if __name__ == "__main__":
     ps.add_fluid_and_rigid()
     wcsph = WCSPH(ps)
     gui = ti.GUI(background_color=0xFFFFFF)
-    
+    while gui.running:
+        for i in range(5):
+            wcsph.step()
+        particle_info = ps.dump()
+        gui.circles(particle_info['position'] * ps.screen_to_world_ratio / 512,
+                    radius=ps.particle_radius / 1.5 * ps.screen_to_world_ratio,
+                    color=0x111113)
+        gui.show()

@@ -1,6 +1,6 @@
 import taichi as ti
 
-import core.const
+import core.const as const
 from core.sph.sph_base import SPHBase
 
 

@@ -29,7 +29,6 @@ class ParticleSystemV2:
         # 网格相关属性
         self.grid_size = self.support_radius
         self.grid_num = np.ceil(np.array(res) / self.grid_size).astype(int)
-        print(self.grid_num)
         self.grid_particles_num = ti.field(int)
         self.grid_particles = ti.field(int)
         self.padding = self.grid_size
@@ -46,7 +45,7 @@ class ParticleSystemV2:
         self.density = ti.field(dtype=float)
         self.pressure = ti.field(dtype=float)
         self.material = ti.field(dtype=int)
-        self.color = ti.Vector.field(3, dtype=float)
+        self.color = ti.field(dtype=int)
         self.particle_neighbors = ti.field(int)
         self.particle_neighbors_num = ti.field(int)
         self.volume = ti.field(dtype=ti.f32)
@@ -90,34 +89,36 @@ class ParticleSystemV2:
         """
         
         # add rigid body
-        for rigid in self.rigidBodiesConfig:
-            voxelized_points = self.load_rigid_body(rigid)
-            particle_num = voxelized_points.shape[0]
-            self.particle_num[None] += particle_num
-            rigid['partice_num'] = particle_num
-            rigid['voxelized_points'] = voxelized_points
-            # TODO: add the material type for the rigid body instead of the boundary material
-            material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
-            color = rigid['color']
-            if type(color[0]) == int:
-                color = [c / 255.0 for c in color]
-            color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
-            velocity = rigid['velocity']
-            velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
+        # for rigid in self.rigidBodiesConfig:
+        #     voxelized_points = self.load_rigid_body(rigid)
+        #     particle_num = voxelized_points.shape[0]
+        #     # print(self.particle_num[None])
+        #     # self.particle_num[None] += particle_num
+        #     rigid['partice_num'] = particle_num
+        #     rigid['voxelized_points'] = voxelized_points
+        #     # TODO: add the material type for the rigid body instead of the boundary material
+        #     material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
+        #     color = rigid['color']
+        #     if type(color[0]) == int:
+        #         color = [c / 255.0 for c in color]
+        #     color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
+        #     velocity = rigid['velocity']
+        #     velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
             
-            density = rigid['density']
-            density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
+        #     density = rigid['density']
+        #     # print(particle_num)
+        #     density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
 
-            pressure = np.full_like(np.zeros(particle_num), 0.)
+        #     pressure = np.full_like(np.zeros(particle_num), 0.)
 
-            positions = voxelized_points
-            self.add_particles(particle_num, 
-                            positions,
-                            velocity,
-                            density,
-                            pressure,
-                            material,
-                            color)
+        #     positions = voxelized_points
+        #     self.add_particles(particle_num, 
+        #                     positions,
+        #                     velocity,
+        #                     density,
+        #                     pressure,
+        #                     material,
+        #                     color)
             
         # add fluid blocks
         for fluid in self.fluidBlocksConfig:
@@ -126,11 +127,11 @@ class ParticleSystemV2:
             velocity = fluid['velocity']
             color = fluid['color']
             density = fluid['density']
-            cube_size = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
+            cube_size = [end[0] - start[0], end[1] - start[1]]
             self.add_cube(lower_corner=start, 
                         cube_size=cube_size, 
                         material= self.material_fluid,
-                        color= color,
+                        color=0x111111,
                         density=density,
                         velocity=velocity)
         
@@ -141,7 +142,7 @@ class ParticleSystemV2:
         self.density[p] = density
         self.pressure[p] = pressure
         self.material[p] = material
-        # self.color[p] = color
+        self.color[p] = color
 
     @ti.kernel
     def add_particles(self, num: int,
@@ -158,12 +159,12 @@ class ParticleSystemV2:
             for j in ti.static(range(self.dim)):
                 v[j] = particle_velocity[i, j]
                 x[j] = particle_position[i, j]
-                color[j] = particle_color[i, j]
+            #     color[j] = particle_color[i, j]
             self.add_particle(self.particle_num[None] + i, x, v,
                             particle_density[i],
                             particle_pressure[i],
                             particle_material[i],
-                            color)
+                            particle_color[i])
         self.particle_num[None] += num
 
     @ti.func
@@ -219,6 +220,7 @@ class ParticleSystemV2:
                 velocity=None):
 
         num_dim = []
+        print(self.dim)
         for i in range(self.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
@@ -233,7 +235,6 @@ class ParticleSystemV2:
                             dtype=np.float32)
         positions = positions.reshape(-1,
                                       reduce(lambda x, y: x * y, list(positions.shape[1:]))).transpose()
-        print("new position shape ", positions.shape)
         velocity = np.full(positions.shape, fill_value=0 if velocity is None else velocity, dtype=np.float32)
         material = np.full_like(np.zeros(num_new_particles), material)
         color = np.full_like(np.zeros(num_new_particles), color)
@@ -268,6 +269,7 @@ class ParticleSystemV2:
         return particle_num
     
     def dump(self):
+        print(self.particle_num[None])
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(np_x, self.x)
 
