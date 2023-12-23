@@ -28,3 +28,14 @@ To run this example.
 ```shell
 python ./render/bpa/d2.py
 ```
+
+## 4.gui
+
+There are two different ways.
+
+- `ti.GUI`: render the 2D points
+- `ti.ggui`: render the 2D and 3D points
+
+A demo render three points with ggui.
+
+![ggui](./assert/ggui.png)
