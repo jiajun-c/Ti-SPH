@@ -23,8 +23,8 @@ class ParticleSystemV3:
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.particle_max_num = 2 ** 15
-        self.particle_max_num_per_cell = 100
-        self.particle_max_num_neighbor = 100
+        self.particle_max_num_per_cell = 1000
+        self.particle_max_num_neighbor = 1000
         self.particle_num = ti.field(int, shape=())
         # # 网格相关属性
         self.grid_size = self.support_radius
@@ -186,18 +186,19 @@ class ParticleSystemV3:
                 continue
             center_cell = self.pos_to_index(self.x[p_i])
             cnt = 0
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 2)):
-                cell = center_cell + offset
-                if not self.is_valid_cell(cell):
-                    break
-                for j in range(self.grid_particles_num[cell]):
-                    p_j = self.grid_particles[cell, j]
-                    if p_j == p_i:
-                        continue
-                    if (self.x[p_i] - self.x[p_j]).norm() >= self.support_radius:
-                        continue
-                    self.particle_neighbors[p_i, cnt] = p_j
-                    cnt += 1
+            if self.dim == 3:
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    cell = center_cell + offset
+                    if not self.is_valid_cell(cell):
+                        break
+                    for j in range(self.grid_particles_num[cell]):
+                        p_j = self.grid_particles[cell, j]
+                        if p_j == p_i:
+                            continue
+                        if (self.x[p_i] - self.x[p_j]).norm() >= self.support_radius:
+                            continue
+                        self.particle_neighbors[p_i, cnt] = p_j
+                        cnt += 1
             self.particle_neighbors_num[p_i] = cnt
     @ti.func
     def for_all_neighbors(self, idx_i, task: ti.template(), ret: ti.template()):
@@ -240,7 +241,6 @@ class ParticleSystemV3:
         color = np.full_like(np.zeros(num_new_particles), color)
         density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
         pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
-        print("add")
         self.add_particles(num_new_particles, positions, velocity, density, pressure, material, color)
 
     @ti.kernel
@@ -290,7 +290,6 @@ class ParticleSystemV3:
         }
 
     def init(self):
-        print("init")
         self.grid_particles_num.fill(0)
         self.particle_neighbors.fill(0)
         self.allocate_particles_to_grid()
