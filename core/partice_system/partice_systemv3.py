@@ -209,7 +209,11 @@ class ParticleSystemV3:
     def allocate_particles_to_grid(self):
         for i in range(self.particle_num[None]):
             cell = self.pos_to_index(self.x[i])
+            if self.is_valid_cell(self.x[i]) == False:
+                continue
             offset = ti.atomic_add(self.grid_particles_num[cell], 1)
+            if offset >= 1000:
+                print("failed to allocate")
             self.grid_particles[cell, offset] = i
 
     def add_cube(self,
@@ -270,7 +274,6 @@ class ParticleSystemV3:
         return particle_num
     
     def dump(self):
-        print(self.particle_num[None])
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(np_x, self.x)
 

@@ -269,7 +269,6 @@ class ParticleSystemV2:
         return particle_num
     
     def dump(self):
-        print(self.particle_num[None])
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(np_x, self.x)
 

@@ -123,6 +123,26 @@ class SPHBase:
                     self.simulate_collisions(
                         p_i, ti.Vector([1.0, 0.0, 0.0]),
                         self.ps.padding - pos[0])
+                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([-1.0, 0.0, 0.0]),
+                        pos[0] - (self.ps.bound[0] - self.ps.padding))
+                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, -1.0, 0.0]),
+                        pos[1] - (self.ps.bound[1] - self.ps.padding))
+                if pos[1] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 1.0, 0.0]),
+                        self.ps.padding - pos[1])
+                if pos[2] > self.ps.bound[2] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 0.0, -1.0]),
+                        pos[1] - (self.ps.bound[2] - self.ps.padding))
+                if pos[2] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 0.0, 1.0]),
+                        self.ps.padding - pos[2])
     
     @ti.func
     def compute_boundary_volume_task(self, p_i, p_j, delta_bi):
@@ -140,11 +160,13 @@ class SPHBase:
     
     @ti.kernel
     def enforce_boundary(self):
-        if self.ps.dim == 2:
-            self.enforce_boundary_2D()
+        # if self.ps.dim == 2:
+        #     self.enforce_boundary_2D()
+        if self.ps.dim == 3:
+            self.enforce_boundary_3D
 
     def step(self):
         self.ps.init()
         self.compute_volume_of_boundary_particle()
         self.substep()
-        # self.enforce_boundary()
+        self.enforce_boundary()

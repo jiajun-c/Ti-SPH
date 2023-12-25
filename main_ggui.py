@@ -27,7 +27,7 @@ if __name__ == "__main__":
         simulation_config = json.load(f)
     
     config = simulation_config['configuration']
-    ps = partice_systemv3.ParticleSystemV3((16, 16, 16), simulation_config)
+    ps = partice_systemv3.ParticleSystemV3((100, 100, 100), simulation_config)
     # add fluid and rigid
     ps.add_fluid_and_rigid()
     wcsph = WCSPH(ps)

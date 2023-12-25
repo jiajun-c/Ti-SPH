@@ -73,7 +73,7 @@ class WCSPH(SPHBase):
 
     def substep(self):
         self.compute_densities()
-        # self.compute_non_pressure_force()
-        # self.compute_pressure_force()
-        # self.advert()
+        self.compute_non_pressure_force()
+        self.compute_pressure_force()
+        self.advert()
 

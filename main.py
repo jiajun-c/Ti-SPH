@@ -2,7 +2,7 @@ import taichi as ti
 import json
 from core.partice_system import partice_systemv2
 from core.sph.wcsph import WCSPH
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.gpu)
 
 if __name__ == "__main__":
     with open("./data/scenes/demo.json", "r") as f:
