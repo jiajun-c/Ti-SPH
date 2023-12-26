@@ -1,7 +1,7 @@
 import taichi as ti
 import json
-from core.partice_system import partice_systemv3, partice_systemv4
-from core.sph.wcsph import WCSPH
+from core.partice_system import partice_systemv4
+from core.sph.wcsphv2 import WCSPHV2
 ti.init(arch=ti.gpu,debug=True, cpu_max_num_threads=1, advanced_optimization=False)
 
 N = 3
@@ -27,10 +27,10 @@ if __name__ == "__main__":
         simulation_config = json.load(f)
     
     config = simulation_config['configuration']
-    ps = partice_systemv3.ParticleSystemV3((100, 100, 100), simulation_config)
+    ps = partice_systemv4.ParticleSystemV4(simulation_config)
     # add fluid and rigid
-    ps.add_fluid_and_rigid()
-    wcsph = WCSPH(ps)
+    # ps.add_fluid_and_rigid()
+    wcsph = WCSPHV2(ps)
     while window.running:
         for i in range(5):
             wcsph.step()

@@ -1,6 +1,7 @@
 {
 	"configuration": 
 	{
+		"dim": 3,
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [5.0, 3.0, 2.0],
 		"particleRadius": 0.01,

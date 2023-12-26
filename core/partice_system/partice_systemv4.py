@@ -4,20 +4,21 @@ import numpy as np
 from functools import reduce
 
 @ti.data_oriented
-class ParticleSystemV2:
+class ParticleSystemV4:
     def __init__(self, simulation_config):
-        assert self.dim > 1
         
         # The configuration 
         self.simulation_config = simulation_config
         self.configuration = self.simulation_config['configuration']
         self.rigidBodiesConfig = self.simulation_config['rigidBodies']  # list
         self.fluidBlocksConfig = self.simulation_config['fluidBlocks']  # list
+        self.density0 = self.configuration['density0']
 
+        self.dim = self.configuration['dim']
         # The domin scope
-        self.domain_start = self.configuration['domainStart']
-        self.domain_end = self.configuration['domainEnd']
-        self.dim = len(self.domin_end)
+        
+        self.domain_start = np.array(self.configuration['domainStart'])
+        self.domain_end = np.array(self.configuration['domainEnd'])
         self.domain_size = self.domain_end - self.domain_start
         
         self.material_boundary = 0
@@ -26,29 +27,37 @@ class ParticleSystemV2:
         self.fluid = self.simulation_config['fluidBlocks']
         self.rigid = self.simulation_config['rigidBodies']
         
-        self.padding = self.support_length  # padding is used for boundary condition when particle collide with wall
-        self.grid_size = self.support_radius
         
-        self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(np.int32)
         
         # particles info
         self.particle_radius = self.configuration['particleRadius']
-        self.support_length = 4 * self.particle_radius
-        self.particle_max_num = self.compute_particle_num() # sum of the particles
-        self.add_fluid_and_rigid() # compute the particle_max_num
-        self.m = ti.field(dtype=float, shape=self.particle_max_num)
-        self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num) # the particle position
-        self.density = ti.field(dtype=float, shape=self.particle_max_num)
-        self.pressure = ti.field(dtype=float, shape=self.particle_max_num)
-        self.material = ti.field(dtype=int, shape=self.particle_max_num)
-        self.color = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
+        self.support_length = 4.0 * self.particle_radius
+        self.padding = self.support_length  # padding is used for boundary condition when particle collide with wall
+        self.particle_num = ti.field(int, shape=())
+        self.particle_max_num = 0
+        self.compute_particle_num() # sum of the particles
+        self.m = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.v = ti.Vector.field(self.dim, dtype=ti.f32, shape=self.particle_max_num)
+        self.volume = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.x = ti.Vector.field(self.dim, dtype=ti.f32, shape=self.particle_max_num) # the particle position
+        self.density = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.pressure = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.material = ti.field(dtype=ti.i32, shape=self.particle_max_num)
+        self.color = ti.Vector.field(3, dtype=ti.int32, shape=self.particle_max_num)
+        self.particle_diameter = 2 * self.particle_radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
-        
+        self.mass = ti.field(dtype=ti.f32, shape=self.particle_max_num) # 单个粒子的质量
+        # self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
+        # self.particles_node.place(self.x)
+        self.add_fluid_and_rigid() # compute the particle_max_num
+
         # grid info
         """after substep,we need to resort the particles.
             | gird(0, 0, 0) nodes | grid(0, 0, 1) nodes |...
         """
+        self.grid_size = self.support_length
+        self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(np.int32)
+
         self.grid_particles_num = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         self.grid_particles_num_temp = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
@@ -66,7 +75,9 @@ class ParticleSystemV2:
         self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.material_buffer = ti.field(dtype=int, shape=self.particle_max_num)
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
-
+        self.volume_buffer = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.mass_buffer = ti.field(dtype=ti.f32,shape=self.particle_max_num)
+        # ti.root.place(self.m, self.v, self.x, self.color, self.mass)
     @ti.func
     def is_valid_cell(self, cell):
         flag = True
@@ -84,12 +95,13 @@ class ParticleSystemV2:
     
     @ti.func
     def flatten_grid_index(self, grid_index):
-        if self.dim == 2:
-            return grid_index[0] * self.grid_num[1] + grid_index[1]
-        if self.dim == 3:
-            return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
-
+        if grid_index[0] < self.grid_num[0] and grid_index[1] < self.grid_num[1] and grid_index[2] < self.grid_num[2] == False:
+            print(grid_index)
+            assert False
+        return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
+    
     def add_fluid_and_rigid(self):
+
         for rigid in self.rigidBodiesConfig:
             voxelized_points = self.load_rigid_body(rigid)
             particle_num = voxelized_points.shape[0]
@@ -118,6 +130,7 @@ class ParticleSystemV2:
                             pressure,
                             material,
                             color)
+            # self.particle_num[None] += voxelized_points.shape[0]
             
         for fluid in self.fluidBlocksConfig:
             start = fluid['start']
@@ -126,22 +139,26 @@ class ParticleSystemV2:
             color = fluid['color']
             density = fluid['density']
             cube_size = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
+            print("before", self.particle_num[None])
             self.add_cube(lower_corner=start, 
                         cube_size=cube_size, 
                         material= self.material_fluid,
                         color=0x111111,
                         density=density,
                         velocity=velocity)
-            
+
     def compute_particle_num(self):
         for fluid in self.fluidBlocksConfig:
             start = fluid['start']
             end = fluid['end']
             self.particle_max_num += self.compute_cube_particles_num(start, end)
+            print(self.particle_max_num)
         for rigid in self.rigidBodiesConfig:
             voxelized_points = self.load_rigid_body(rigid)
             particle_num = voxelized_points.shape[0]
             self.particle_max_num += particle_num
+            print(self.particle_max_num)
+
 
     def compute_cube_particles_num(self, start, end):
         num_dim = []
@@ -152,7 +169,7 @@ class ParticleSystemV2:
         num_new_particles = reduce(lambda x, y: x * y,
                                     [len(n) for n in num_dim])
         return num_new_particles
-         
+        
         
     @ti.kernel
     def add_particles(self, num: int,
@@ -162,27 +179,32 @@ class ParticleSystemV2:
                     particle_pressure: ti.types.ndarray(),
                     particle_material: ti.types.ndarray(),
                     particle_color: ti.types.ndarray()):
+        print("add now", self.particle_num[None])
         for i in range(num):
             v = ti.Vector.zero(float, self.dim)
             x = ti.Vector.zero(float, self.dim)
-            color = ti.Vector.zero(float, self.dim)
             for j in ti.static(range(self.dim)):
                 v[j] = particle_velocity[i, j]
                 x[j] = particle_position[i, j]
-            #     color[j] = particle_color[i, j]
             self.add_particle(self.particle_num[None] + i, x, v,
                             particle_density[i],
                             particle_pressure[i],
                             particle_material[i],
                             particle_color[i])
+        self.particle_num[None] += num
+        
     @ti.func
     def add_particle(self, p, x, v, density, pressure, material, color):
+        # if p >= self.particle_max_num:
+            # print("error:", self.particle_num[None])
         self.x[p] = x
         self.v[p] = v
         self.density[p] = density
         self.pressure[p] = pressure
         self.material[p] = material
         self.color[p] = color
+        self.volume[p] = self.m_V0 # TODO: fluid volume need be compute later
+        self.mass[p] = self.volume[p]*self.density[p]
 
     @ti.kernel
     def update_gird_id(self):
@@ -194,12 +216,11 @@ class ParticleSystemV2:
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
         for i in ti.grouped(self.grid_particles_num):
             self.grid_particles_num_temp[i] = self.grid_particles_num[i]
-        self.prefix_sum_executor.run(self.grid_particles_num)
     
     @ti.kernel
     def resort(self):
-        for i in range(self.grid_particles_num):
-            j = self.grid_particles_num
+        for i in range(self.particle_max_num):
+            j = self.particle_max_num - 1 -i
             offset = 0
             if self.grid_ids[j] - 1 >= 0:
                 offset = self.grid_particles_num[self.grid_ids[j] - 1]
@@ -215,21 +236,26 @@ class ParticleSystemV2:
             self.pressure_buffer[newIndex] = self.pressure[i]
             self.material_buffer[newIndex] = self.material[i]
             self.color_buffer[newIndex] = self.color[i]
-        
+            self.mass_buffer[newIndex] = self.mass[i]
+            self.volume_buffer[newIndex] = self.volume[i]
+            
         for i in ti.grouped(self.x):
             self.grid_ids[i] = self.grid_ids_buffer[i]
             self.m[i] = self.m_buffer[i]
             self.v[i] = self.v_buffer[i]
-            self.x[newIndex] = self.x_buffer[i]
-            self.density[newIndex] = self.density_buffer[i]
-            self.pressure[newIndex] = self.pressure_buffer[i]
-            self.material[newIndex] = self.material_buffer[i]
-            self.color[newIndex] = self.color_buffer[i]
+            self.x[i] = self.x_buffer[i]
+            self.density[i] = self.density_buffer[i]
+            self.pressure[i] = self.pressure_buffer[i]
+            self.material[i] = self.material_buffer[i]
+            self.color[i] = self.color_buffer[i]
+            self.mass[i] = self.mass_buffer[i]
+            self.volume[i] = self.volume_buffer[i]
             
     def update(self):
         """After sph substep, the particles system should be updated
         """
         self.update_gird_id()
+        self.prefix_sum_executor.run(self.grid_particles_num)
         self.resort()
         
         pass
@@ -318,5 +344,40 @@ class ParticleSystemV2:
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
             for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
+                if p_i != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_length:
                     task(p_i, p_j, ret)
+
+    def add_cube(self,
+                lower_corner,
+                cube_size,
+                material,
+                color=0xFFFFFF,
+                density=None,
+                pressure=None,
+                velocity=None):
+
+        num_dim = []
+        for i in range(self.dim):
+            num_dim.append(
+                np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
+                            self.particle_radius))
+        num_new_particles = reduce(lambda x, y: x * y,
+                                    [len(n) for n in num_dim])
+
+        # assert self.particle_num[None] + num_new_particles <= self.particle_max_num
+        positions = np.array(np.meshgrid(*num_dim, indexing='ij'), dtype=np.float32)
+        positions = positions.reshape(self.dim, num_new_particles).T
+        # positions = np.array(np.meshgrid(*num_dim,
+        #                                 sparse=False,
+        #                                 indexing='ij'),
+        #                     dtype=np.float32)
+        # positions = positions.reshape(-1,
+        #                               reduce(lambda x, y: x * y, list(positions.shape[1:]))).transpose()
+        velocity = np.full(positions.shape, fill_value=0 if velocity is None else velocity, dtype=np.float32)
+        material = np.full_like(np.zeros(num_new_particles), material)
+        color = np.full_like(np.zeros(num_new_particles), color)
+        density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
+        pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
+        print("shape", positions.shape)
+        self.add_particles(num_new_particles, positions, velocity, density, pressure, material, color)
+
