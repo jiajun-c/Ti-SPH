@@ -65,12 +65,15 @@ class SPHBaseV2:
         # [fixed] support 2D/3D now
         res = ti.Vector([0.0 for _ in range(self.ps.dim)])
         p_rho_i = self.ps.pressure[p_i] / (self.ps.density[p_i] ** 2)
+        
         if self.ps.material[p_j] == self.ps.material_fluid:
-            res = -self.density_0 * self.ps.mass[p_j] * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
+            # print(self.ps.mass[p_j])
+            res = - self.ps.mass[p_j] * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
                                                + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
               * self.cubic_kernel_derivative(r)
         elif self.ps.material[p_j] == self.ps.material_boundary:
-            res = -self.density_0*self.ps.v[p_j] * p_rho_i * self.cubic_kernel_derivative(r)
+            res = -self.density_0*self.ps.volume[p_j] * p_rho_i * self.cubic_kernel_derivative(r)
+        # print(self.ps.pressure[p_i],self.ps.density[p_i] ,p_rho_i)
         return res
 
     # 液体的粘性力
@@ -123,27 +126,66 @@ class SPHBaseV2:
                     self.simulate_collisions(
                         p_i, ti.Vector([1.0, 0.0, 0.0]),
                         self.ps.padding - pos[0])
-                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                if pos[0] > self.ps.domain_end[0] - self.ps.padding:
                     self.simulate_collisions(
                         p_i, ti.Vector([-1.0, 0.0, 0.0]),
-                        pos[0] - (self.ps.bound[0] - self.ps.padding))
-                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                        pos[0] - (self.ps.domain_end[0] - self.ps.padding))
+                if pos[1] > self.ps.domain_end[1] - self.ps.padding:
                     self.simulate_collisions(
                         p_i, ti.Vector([0.0, -1.0, 0.0]),
-                        pos[1] - (self.ps.bound[1] - self.ps.padding))
+                        pos[1] - (self.ps.domain_end[1] - self.ps.padding))
                 if pos[1] < self.ps.padding:
                     self.simulate_collisions(
                         p_i, ti.Vector([0.0, 1.0, 0.0]),
                         self.ps.padding - pos[1])
-                if pos[2] > self.ps.bound[2] - self.ps.padding:
+                if pos[2] > self.ps.domain_end[2] - self.ps.padding:
                     self.simulate_collisions(
                         p_i, ti.Vector([0.0, 0.0, -1.0]),
-                        pos[1] - (self.ps.bound[2] - self.ps.padding))
+                        pos[1] - (self.ps.domain_end[2] - self.ps.padding))
                 if pos[2] < self.ps.padding:
                     self.simulate_collisions(
                         p_i, ti.Vector([0.0, 0.0, 1.0]),
                         self.ps.padding - pos[2])
-    
+                
+    @ti.func
+    def simulate_collisions_v1(self, p_i, vec):
+        # Collision factor, assume roughly (1-c_f)*velocity loss after collision
+        c_f = 0.5
+        self.ps.v[p_i] -= (
+            1.0 + c_f) * self.ps.v[p_i].dot(vec) * vec
+        
+    @ti.func
+    def enforce_boundary_3D_v1(self, particle_type:int):
+        for p_i in ti.grouped(self.ps.x):
+            if self.ps.material[p_i] == particle_type:
+                pos = self.ps.x[p_i]
+                collision_normal = ti.Vector([0.0, 0.0, 0.0])
+                if pos[0] > self.ps.domain_size[0] - self.ps.padding:
+                    collision_normal[0] += 1.0
+                    self.ps.x[p_i][0] = self.ps.domain_size[0] - self.ps.padding
+                if pos[0] <= self.ps.padding:
+                    collision_normal[0] += -1.0
+                    self.ps.x[p_i][0] = self.ps.padding
+
+                if pos[1] > self.ps.domain_size[1] - self.ps.padding:
+                    collision_normal[1] += 1.0
+                    self.ps.x[p_i][1] = self.ps.domain_size[1] - self.ps.padding
+                if pos[1] <= self.ps.padding:
+                    collision_normal[1] += -1.0
+                    self.ps.x[p_i][1] = self.ps.padding
+
+                if pos[2] > self.ps.domain_size[2] - self.ps.padding:
+                    collision_normal[2] += 1.0
+                    self.ps.x[p_i][2] = self.ps.domain_size[2] - self.ps.padding
+                if pos[2] <= self.ps.padding:
+                    collision_normal[2] += -1.0
+                    self.ps.x[p_i][2] = self.ps.padding
+
+                collision_normal_length = collision_normal.norm()
+                if collision_normal_length > 1e-6:
+                    self.simulate_collisions_v1(
+                            p_i, collision_normal / collision_normal_length)
+            assert self.ps.x[p_i][1] < self.ps.domain_size[1] and self.ps.x[p_i][2] < self.ps.domain_size[2] and self.ps.x[p_i][0] < self.ps.domain_size[0]
     @ti.func
     def compute_boundary_volume_task(self, p_i, p_j, delta_bi):
         if self.ps.material[p_j] == self.ps.material_boundary:
@@ -162,8 +204,7 @@ class SPHBaseV2:
     def enforce_boundary(self):
         # if self.ps.dim == 2:
         #     self.enforce_boundary_2D()
-        if self.ps.dim == 3:
-            self.enforce_boundary_3D
+        self.enforce_boundary_3D_v1(self.ps.material_fluid)
 
     def step(self):
         self.ps.update()

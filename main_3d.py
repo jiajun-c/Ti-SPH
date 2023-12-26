@@ -2,7 +2,7 @@ import taichi as ti
 import json
 from core.partice_system import partice_systemv4
 from core.sph.wcsphv2 import WCSPHV2
-ti.init(arch=ti.gpu,debug=True, cpu_max_num_threads=1, advanced_optimization=False)
+ti.init(arch=ti.cuda)
 
 N = 3
 
@@ -31,6 +31,8 @@ if __name__ == "__main__":
     # add fluid and rigid
     # ps.add_fluid_and_rigid()
     wcsph = WCSPHV2(ps)
+    # wcsph.step()
+    # wcsph.step()
     while window.running:
         for i in range(5):
             wcsph.step()
@@ -39,14 +41,12 @@ if __name__ == "__main__":
         scene.set_camera(camera)
         scene.ambient_light((0.8, 0.8, 0.8))
         scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
-        positions = ti.Vector.field(3, dtype=ti.f32, shape= len(particle_info['position']))
-        for i in range(len(particle_info['position'])):
-            for j in range(3):
-                positions[i][j] = particle_info['position'][i][j]
-        scene.particles(positions, color = (0.68, 0.26, 0.19), radius = 0.01)
-        # print(particle_info)
-        # Draw 3d-lines in the scene
-        # scene.lines(points_pos, color = (0.28, 0.68, 0.99), width = 5.0)
+        # positions = ti.Vector.field(3, dtype=ti.f32, shape= len(particle_info['position']))
+        # for i in range(len(particle_info['position'])):
+        #     for j in range(3):
+        #         positions[i][j] = particle_info['position'][i][j]
+        scene.particles(ps.x, color = (0.68, 0.26, 0.19), radius = 0.01)
+        # print(particle_info['position'])
         canvas.scene(scene)
         window.show()
-        
+    

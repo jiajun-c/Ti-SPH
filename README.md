@@ -21,6 +21,7 @@ This is my graduation project
 Using the bpa algorithm to render the points.
 
 > This example render the points in a circle.
+
 ![2d](./assert/bpa.png)
 
 To run this example.
@@ -39,3 +40,7 @@ There are two different ways.
 A demo render three points with ggui.
 
 ![ggui](./assert/ggui.png)
+
+A 3d demo running with ggui
+
+![3d](./assert/3d.png)

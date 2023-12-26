@@ -29,9 +29,9 @@ class WCSPHV2(SPHBaseV2):
     def compute_densities(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] == self.ps.material_fluid:
-                self.ps.density[p_i] = 0.0
+                density = self.ps.mass[p_i] * self.cubic_kernel(0.0)
                 self.ps.for_all_neighbors(p_i, self.compute_density_task, self.ps.density[p_i])
-                self.ps.density[p_i] *= self.density_0
+                self.ps.density[p_i] = density
 
     @ti.func
     def compute_pressure_force_task(self, p_i, p_j, ret: ti.template()):
@@ -46,14 +46,13 @@ class WCSPHV2(SPHBaseV2):
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             # wcsph 的关键
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
-
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             self.ps.for_all_neighbors(p_i, self.compute_pressure_force_task, d_v)
             self.d_velocity[p_i] += d_v
-
+            # print(self.ps.pressure[p_i], self.ps.density[p_i])
     @ti.func
     def compute_non_pressure_force_task(self, p_i, p_j, ret:ti.template()):
         x_i = self.ps.x[p_i]

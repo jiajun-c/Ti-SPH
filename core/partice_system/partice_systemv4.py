@@ -57,7 +57,7 @@ class ParticleSystemV4:
         """
         self.grid_size = self.support_length
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(np.int32)
-
+        print(self.grid_num)
         self.grid_particles_num = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         self.grid_particles_num_temp = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
@@ -77,7 +77,6 @@ class ParticleSystemV4:
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.volume_buffer = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.mass_buffer = ti.field(dtype=ti.f32,shape=self.particle_max_num)
-        # ti.root.place(self.m, self.v, self.x, self.color, self.mass)
     @ti.func
     def is_valid_cell(self, cell):
         flag = True
@@ -95,9 +94,8 @@ class ParticleSystemV4:
     
     @ti.func
     def flatten_grid_index(self, grid_index):
-        if grid_index[0] < self.grid_num[0] and grid_index[1] < self.grid_num[1] and grid_index[2] < self.grid_num[2] == False:
+        if (grid_index[0] < self.grid_num[0] and grid_index[1] < self.grid_num[1] and grid_index[2] < self.grid_num[2]) == False:
             print(grid_index)
-            assert False
         return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
     
     def add_fluid_and_rigid(self):
@@ -210,9 +208,9 @@ class ParticleSystemV4:
     def update_gird_id(self):
         for i in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[i] = 0
-        for i in ti.grouped(self.x):
-            grid_index = self.get_flatten_grid_index(self.x[i])
-            self.grid_ids[i] = grid_index
+        for I in ti.grouped(self.x):
+            grid_index = self.get_flatten_grid_index(self.x[I])
+            self.grid_ids[I] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
         for i in ti.grouped(self.grid_particles_num):
             self.grid_particles_num_temp[i] = self.grid_particles_num[i]
@@ -289,8 +287,8 @@ class ParticleSystemV4:
         np_material = np.ndarray((self.particle_num[None],), dtype=np.int32)
         self.copy_to_numpy(np_material, self.material)
 
-        np_color = np.ndarray((self.particle_num[None],), dtype=np.int32)
-        self.copy_to_numpy(np_color, self.color)
+        np_color = np.ndarray((self.particle_num[None], 3), dtype=np.int32)
+        self.copy_to_numpy_nd(np_color, self.color)
         return {
             'position': np_x,
             'velocity': np_v,
@@ -367,12 +365,6 @@ class ParticleSystemV4:
         # assert self.particle_num[None] + num_new_particles <= self.particle_max_num
         positions = np.array(np.meshgrid(*num_dim, indexing='ij'), dtype=np.float32)
         positions = positions.reshape(self.dim, num_new_particles).T
-        # positions = np.array(np.meshgrid(*num_dim,
-        #                                 sparse=False,
-        #                                 indexing='ij'),
-        #                     dtype=np.float32)
-        # positions = positions.reshape(-1,
-        #                               reduce(lambda x, y: x * y, list(positions.shape[1:]))).transpose()
         velocity = np.full(positions.shape, fill_value=0 if velocity is None else velocity, dtype=np.float32)
         material = np.full_like(np.zeros(num_new_particles), material)
         color = np.full_like(np.zeros(num_new_particles), color)
