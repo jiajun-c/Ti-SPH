@@ -43,4 +43,4 @@ A demo render three points with ggui.
 
 A 3d demo running with ggui
 
-![3d](./assert/3d.png)
+![3d](./assert/success.png)

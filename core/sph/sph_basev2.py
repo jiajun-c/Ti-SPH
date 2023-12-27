@@ -13,6 +13,7 @@ class SPHBaseV2:
         self.density_0 = 1000.0  # 水 的密度
         self.dt = ti.field(float, shape=())
         self.dt[None] = 2e-4
+        self.g = self.ps.configuration['gravitation']
         # self.mass = self.ps.m_V * self.density_0  # 单位体积内的质量
 
     @ti.func

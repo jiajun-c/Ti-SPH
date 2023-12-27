@@ -4,23 +4,15 @@ from core.partice_system import partice_systemv4
 from core.sph.wcsphv2 import WCSPHV2
 ti.init(arch=ti.cuda)
 
-N = 3
-
-particles_pos = ti.Vector.field(3, dtype=ti.f32, shape = N)
-points_pos = ti.Vector.field(3, dtype=ti.f32, shape = N)
-
-@ti.kernel
-def init_points_pos(points : ti.template()):
-    for i in range(points.shape[0]):
-        points[i] = [i for j in ti.static(range(3))]
-
-init_points_pos(particles_pos)
-
-window = ti.ui.Window("Test for Drawing 3d-lines", (768, 768))
+window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)
 canvas = window.get_canvas()
 scene = window.get_scene()
 camera = ti.ui.Camera()
-camera.position(5, 2, 2)
+camera.position(5.5, 2.5, 4.0)
+camera.up(0.0, 1.0, 0.0)
+camera.lookat(-1.0, 0.0, 0.0)
+camera.fov(70)
+scene.set_camera(camera)
 
 if __name__ == "__main__":
     with open("./data/scenes/demo_3d.json", "r") as f:
@@ -37,10 +29,8 @@ if __name__ == "__main__":
         for i in range(5):
             wcsph.step()
         particle_info = ps.dump()
-        camera.track_user_inputs(window, movement_speed=0.03, hold_key=ti.ui.RMB)
-        scene.set_camera(camera)
-        scene.ambient_light((0.8, 0.8, 0.8))
-        scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
+        camera.track_user_inputs(window, movement_speed=0.03, hold_key=ti.ui.LMB)
+        scene.point_light(pos=(2, 2, 2), color=(1, 1, 1))
         # positions = ti.Vector.field(3, dtype=ti.f32, shape= len(particle_info['position']))
         # for i in range(len(particle_info['position'])):
         #     for j in range(3):

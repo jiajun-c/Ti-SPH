@@ -87,7 +87,8 @@ class WCSPHV2(SPHBaseV2):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            d_v[self.ps.dim - 1] = const.g
+            for i in ti.static(range(3)):
+                d_v[i] = self.g[i]
             self.ps.for_all_neighbors(p_i, self.compute_non_pressure_force_task, d_v)
             self.d_velocity[p_i] = d_v
 
