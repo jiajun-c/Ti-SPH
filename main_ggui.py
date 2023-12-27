@@ -21,7 +21,21 @@ canvas = window.get_canvas()
 scene = window.get_scene()
 camera = ti.ui.Camera()
 camera.position(5, 2, 2)
+box_anchors = ti.Vector.field(3, dtype=ti.f32, shape = 8)
+box_anchors[0] = ti.Vector([0.0, 0.0, 0.0])
+box_anchors[1] = ti.Vector([0.0, 3.0, 0.0])
+box_anchors[2] = ti.Vector([5.0, 0.0, 0.0])
+box_anchors[3] = ti.Vector([5.0, 3.0, 0.0])
 
+box_anchors[4] = ti.Vector([0.0, 0.0, 2.0])
+box_anchors[5] = ti.Vector([0.0, 3.0, 2.0])
+box_anchors[6] = ti.Vector([5.0, 0.0, 2.0])
+box_anchors[7] = ti.Vector([5.0, 3.0, 2.0])
+
+box_lines_indices = ti.field(int, shape=(2 * 12))
+for i, val in enumerate([0, 1, 0, 2, 1, 3, 2, 3, 4, 5, 4, 6, 5, 7, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7]):
+    box_lines_indices[i] = val
+    
 if __name__ == "__main__":
     with open("./data/scenes/demo_3d.json", "r") as f:
         simulation_config = json.load(f)
@@ -43,10 +57,7 @@ if __name__ == "__main__":
         for i in range(len(particle_info['position'])):
             for j in range(3):
                 positions[i][j] = particle_info['position'][i][j]
-        scene.particles(positions, color = (0.68, 0.26, 0.19), radius = 0.01)
-        # print(particle_info)
-        # Draw 3d-lines in the scene
-        # scene.lines(points_pos, color = (0.28, 0.68, 0.99), width = 5.0)
+        # scene.particles(positions, color = (0.68, 0.26, 0.19), radius = 0.01)
         canvas.scene(scene)
         window.show()
         

@@ -57,7 +57,6 @@ class ParticleSystemV4:
         """
         self.grid_size = self.support_length
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(np.int32)
-        print(self.grid_num)
         self.grid_particles_num = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         self.grid_particles_num_temp = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
@@ -86,6 +85,10 @@ class ParticleSystemV4:
 
     @ti.func
     def pos_to_index(self, pos):
+        assert pos[1] < self.domain_size[1] and pos[2] < self.domain_size[2] and pos[0] < self.domain_size[0]
+        ans = (pos / self.grid_size).cast(int)
+        if pos[0] >= self.domain_size[0] or pos[1] >= self.domain_size[1] or pos[2] >= self.domain_size[2]:
+            print(ans)
         return (pos / self.grid_size).cast(int)
     
     @ti.func
@@ -94,8 +97,6 @@ class ParticleSystemV4:
     
     @ti.func
     def flatten_grid_index(self, grid_index):
-        if (grid_index[0] < self.grid_num[0] and grid_index[1] < self.grid_num[1] and grid_index[2] < self.grid_num[2]) == False:
-            print(grid_index)
         return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
     
     def add_fluid_and_rigid(self):
@@ -137,7 +138,6 @@ class ParticleSystemV4:
             color = fluid['color']
             density = fluid['density']
             cube_size = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
-            print("before", self.particle_num[None])
             self.add_cube(lower_corner=start, 
                         cube_size=cube_size, 
                         material= self.material_fluid,
@@ -150,12 +150,11 @@ class ParticleSystemV4:
             start = fluid['start']
             end = fluid['end']
             self.particle_max_num += self.compute_cube_particles_num(start, end)
-            print(self.particle_max_num)
+            # print(self.particle_max_num)
         for rigid in self.rigidBodiesConfig:
             voxelized_points = self.load_rigid_body(rigid)
             particle_num = voxelized_points.shape[0]
             self.particle_max_num += particle_num
-            print(self.particle_max_num)
 
 
     def compute_cube_particles_num(self, start, end):
