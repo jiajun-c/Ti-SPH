@@ -31,6 +31,7 @@ class ParticleSystemV4:
         
         # particles info
         self.particle_radius = self.configuration['particleRadius']
+        self.particle_diameter = 2 * self.particle_radius
         self.support_length = 4.0 * self.particle_radius
         self.padding = self.support_length  # padding is used for boundary condition when particle collide with wall
         self.particle_num = ti.field(int, shape=())
@@ -44,7 +45,6 @@ class ParticleSystemV4:
         self.pressure = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.material = ti.field(dtype=ti.i32, shape=self.particle_max_num)
         self.color = ti.Vector.field(3, dtype=ti.int32, shape=self.particle_max_num)
-        self.particle_diameter = 2 * self.particle_radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.mass = ti.field(dtype=ti.f32, shape=self.particle_max_num) # 单个粒子的质量
         # self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
@@ -108,10 +108,10 @@ class ParticleSystemV4:
             rigid['partice_num'] = particle_num
             rigid['voxelized_points'] = voxelized_points
             material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
-            color = rigid['color']
-            if type(color[0]) == int:
-                color = [c / 255.0 for c in color]
-            color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
+            # color = rigid['color']
+            # if type(color[0]) == int:
+            #     color = [c / 255.0 for c in color]
+            # color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
             velocity = rigid['velocity']
             velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
             
@@ -120,6 +120,7 @@ class ParticleSystemV4:
             density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
 
             pressure = np.full_like(np.zeros(particle_num), 0.)
+            color = np.full_like(np.zeros(particle_num), 0xFFFFFF)
 
             positions = voxelized_points
             self.add_particles(particle_num, 
