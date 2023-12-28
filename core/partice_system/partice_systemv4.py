@@ -163,7 +163,7 @@ class ParticleSystemV4:
         for i in range(self.dim):
             num_dim.append(
                 np.arange(start[i], end[i],
-                            self.particle_radius))
+                            self.particle_diameter))
         num_new_particles = reduce(lambda x, y: x * y,
                                     [len(n) for n in num_dim])
         return num_new_particles
@@ -358,7 +358,7 @@ class ParticleSystemV4:
         for i in range(self.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
-                            self.particle_radius))
+                            self.particle_diameter))
         num_new_particles = reduce(lambda x, y: x * y,
                                     [len(n) for n in num_dim])
 
