@@ -44,7 +44,7 @@ class ParticleSystemV4:
         self.density = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.pressure = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.material = ti.field(dtype=ti.i32, shape=self.particle_max_num)
-        self.color = ti.Vector.field(3, dtype=ti.int32, shape=self.particle_max_num)
+        self.object_id = ti.Vector.field(3, dtype=ti.int32, shape=self.particle_max_num)
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.mass = ti.field(dtype=ti.f32, shape=self.particle_max_num) # 单个粒子的质量
         # self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
@@ -73,7 +73,7 @@ class ParticleSystemV4:
         self.density_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.material_buffer = ti.field(dtype=int, shape=self.particle_max_num)
-        self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
+        self.object_id_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.volume_buffer = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.mass_buffer = ti.field(dtype=ti.f32,shape=self.particle_max_num)
     @ti.func
@@ -176,7 +176,7 @@ class ParticleSystemV4:
                     particle_density: ti.types.ndarray(),
                     particle_pressure: ti.types.ndarray(),
                     particle_material: ti.types.ndarray(),
-                    particle_color: ti.types.ndarray()):
+                    object_id: int):
         print("add now", self.particle_num[None])
         for i in range(num):
             v = ti.Vector.zero(float, self.dim)
@@ -188,11 +188,11 @@ class ParticleSystemV4:
                             particle_density[i],
                             particle_pressure[i],
                             particle_material[i],
-                            particle_color[i])
+                            object_id)
         self.particle_num[None] += num
         
     @ti.func
-    def add_particle(self, p, x, v, density, pressure, material, color):
+    def add_particle(self, p, x, v, density, pressure, material, id):
         # if p >= self.particle_max_num:
             # print("error:", self.particle_num[None])
         self.x[p] = x
@@ -200,7 +200,7 @@ class ParticleSystemV4:
         self.density[p] = density
         self.pressure[p] = pressure
         self.material[p] = material
-        self.color[p] = color
+        self.object_id[p] = id
         self.volume[p] = self.m_V0 # TODO: fluid volume need be compute later
         self.mass[p] = self.volume[p]*self.density[p]
 
@@ -233,7 +233,7 @@ class ParticleSystemV4:
             self.density_buffer[newIndex] = self.density[i]
             self.pressure_buffer[newIndex] = self.pressure[i]
             self.material_buffer[newIndex] = self.material[i]
-            self.color_buffer[newIndex] = self.color[i]
+            self.object_id_buffer[newIndex] = self.object_id[i]
             self.mass_buffer[newIndex] = self.mass[i]
             self.volume_buffer[newIndex] = self.volume[i]
             
@@ -245,7 +245,7 @@ class ParticleSystemV4:
             self.density[i] = self.density_buffer[i]
             self.pressure[i] = self.pressure_buffer[i]
             self.material[i] = self.material_buffer[i]
-            self.color[i] = self.color_buffer[i]
+            self.object_id[i] = self.object_id_buffer[i]
             self.mass[i] = self.mass_buffer[i]
             self.volume[i] = self.volume_buffer[i]
             
@@ -287,13 +287,13 @@ class ParticleSystemV4:
         np_material = np.ndarray((self.particle_num[None],), dtype=np.int32)
         self.copy_to_numpy(np_material, self.material)
 
-        np_color = np.ndarray((self.particle_num[None], 3), dtype=np.int32)
-        self.copy_to_numpy_nd(np_color, self.color)
+        np_object_id = np.ndarray((self.particle_num[None],), dtype=np.int32)
+        self.copy_to_numpy(np_object_id, self.object_id)
         return {
             'position': np_x,
             'velocity': np_v,
             'material': np_material,
-            'color': np_color
+            'objectID': np_object_id
         }
         
     @ti.kernel
