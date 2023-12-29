@@ -14,16 +14,22 @@ def helper(positions:ti.template(), prefix_sum:ti.template(),count: ti.template(
         # print(ti.atomic_add(count[int(ids[i])], 1) + offset, i)
         ret[ti.atomic_add(count[int(ids[i])], 1)+ offset] = positions[i]
 
-def resortObjects(postions, ids, object_counts, particle_num:int, object_num:int):
+def resortObjects(postions, ids, object_counts, particle_num:int, object_num:int, ret):
+    """resort the objects
+
+    Args:
+        postions (_type_): the particle positions
+        ids (_type_): the object id of the particles
+        object_counts (_type_): _description_
+        particle_num (int): _description_
+        object_num (int): number of the objects
+    """
     prefix_sum = ti.field(dtype=ti.i32, shape=object_num)
     prefix_sum.from_numpy(object_counts)
     prefix_sum_executor = ti.algorithms.PrefixSumExecutor(particle_num)
     prefix_sum_executor.run(prefix_sum)
-    ret = ti.Vector.field(3, dtype=ti.f32, shape=particle_num) # the particle position
     count =  ti.field(dtype=ti.i32, shape=object_num)
     helper(postions,prefix_sum,count, ids,ret)
-    for i in range(particle_num):
-        postions[i] = ret[i]
 
 
 
@@ -33,6 +39,8 @@ ids = ti.field(dtype=ti.f32, shape=6) # the particle position
 ids_arr = np.array([0, 2, 2, 2, 1, 1])
 pos.from_numpy(pos_arr)
 ids.from_numpy(ids_arr)
+ret = ti.Vector.field(3, dtype=ti.f32, shape=6) # the particle position
+
 print(pos)
-resortObjects(postions= pos,ids= ids,object_counts= data,particle_num= 6,object_num= 3 )
-print(pos)
+resortObjects(postions= pos,ids= ids,object_counts= data,particle_num= 6,object_num= 3, ret=ret)
+print(ret)
