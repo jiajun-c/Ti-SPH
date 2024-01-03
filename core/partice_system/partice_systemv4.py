@@ -44,7 +44,7 @@ class ParticleSystemV4:
         self.density = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.pressure = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.material = ti.field(dtype=ti.i32, shape=self.particle_max_num)
-        self.object_id = ti.Vector.field(3, dtype=ti.int32, shape=self.particle_max_num)
+        self.object_id = ti.field(dtype=ti.int32, shape=self.particle_max_num)
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.mass = ti.field(dtype=ti.f32, shape=self.particle_max_num) # 单个粒子的质量
         # self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
@@ -73,7 +73,7 @@ class ParticleSystemV4:
         self.density_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.material_buffer = ti.field(dtype=int, shape=self.particle_max_num)
-        self.object_id_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
+        self.object_id_buffer = ti.field(dtype=int, shape=self.particle_max_num)
         self.volume_buffer = ti.field(dtype=ti.f32, shape=self.particle_max_num)
         self.mass_buffer = ti.field(dtype=ti.f32,shape=self.particle_max_num)
     @ti.func
@@ -129,7 +129,7 @@ class ParticleSystemV4:
                             density,
                             pressure,
                             material,
-                            color)
+                            1)
             # self.particle_num[None] += voxelized_points.shape[0]
             
         for fluid in self.fluidBlocksConfig:
@@ -139,12 +139,14 @@ class ParticleSystemV4:
             color = fluid['color']
             density = fluid['density']
             cube_size = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
+            object_id = fluid['objectId']
             self.add_cube(lower_corner=start, 
                         cube_size=cube_size, 
                         material= self.material_fluid,
                         color=0x111111,
                         density=density,
-                        velocity=velocity)
+                        velocity=velocity,
+                        object_id=object_id)
 
     def compute_particle_num(self):
         for fluid in self.fluidBlocksConfig:
@@ -352,7 +354,8 @@ class ParticleSystemV4:
                 color=0xFFFFFF,
                 density=None,
                 pressure=None,
-                velocity=None):
+                velocity=None,
+                object_id=-1):
 
         num_dim = []
         for i in range(self.dim):
@@ -371,5 +374,5 @@ class ParticleSystemV4:
         density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
         pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
         print("shape", positions.shape)
-        self.add_particles(num_new_particles, positions, velocity, density, pressure, material, color)
+        self.add_particles(num_new_particles, positions, velocity, density, pressure, material, object_id)
 
