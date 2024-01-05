@@ -1,6 +1,6 @@
 import taichi as ti
 import json
-from core.partice_system import partice_systemv2
+from core.particle_system import partice_systemv2
 from core.sph.wcsph import WCSPH
 ti.init(arch=ti.gpu)
 

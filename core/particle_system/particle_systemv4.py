@@ -23,6 +23,7 @@ class ParticleSystemV4:
         
         self.material_boundary = 0
         self.material_fluid = 1
+        self.material_rigid_dynamic = 2
         
         self.fluid = self.simulation_config['fluidBlocks']
         self.rigid = self.simulation_config['rigidBodies']
@@ -107,7 +108,13 @@ class ParticleSystemV4:
             # print(self.particle_num[None])
             rigid['partice_num'] = particle_num
             rigid['voxelized_points'] = voxelized_points
-            material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
+            material = self.material_boundary
+            """
+            If a body is dynamic, it can be 
+            """
+            if rigid['dynamic']:
+                material = self.material_rigid_dynamic
+            material = np.full((particle_num, ), material, dtype=np.int32)
             # color = rigid['color']
             # if type(color[0]) == int:
             #     color = [c / 255.0 for c in color]
@@ -373,6 +380,8 @@ class ParticleSystemV4:
         color = np.full_like(np.zeros(num_new_particles), color)
         density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
         pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
-        print("shape", positions.shape)
         self.add_particles(num_new_particles, positions, velocity, density, pressure, material, object_id)
 
+    @ti.func
+    def is_dynamic(self, material):
+        return material == self.material_fluid or material == self.material_rigid_dynamic

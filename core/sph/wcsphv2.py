@@ -78,6 +78,8 @@ class WCSPHV2(SPHBaseV2):
             x_ij = self.ps.x[p_i] - self.ps.x[p_j]
             pi = -nu * ti.min(v_ij.dot(x_ij), 0.0) / (x_ij.dot(x_ij) + 0.01 * self.ps.support_length ** 2)  # eq (11)
             ret -= self.ps.density0 * self.ps.volume[p_j] * pi * self.cubic_kernel_derivative(x_ij)  # eq (13)
+            if self.ps.material[p_j] == self.ps.material_rigid_dynamic:
+                self.d_velocity[p_j]
         
     # 计算粘性力以及加速度
     @ti.kernel
@@ -95,10 +97,10 @@ class WCSPHV2(SPHBaseV2):
     @ti.kernel
     def advert(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == self.ps.material_fluid:
+            if self.ps.is_dynamic(self.ps.material[p_i]):
                 self.ps.v[p_i] += self.dt[None] * self.d_velocity[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
-
+            
     def substep(self):
         self.compute_densities()
         self.compute_non_pressure_force()

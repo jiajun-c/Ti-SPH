@@ -158,7 +158,7 @@ class SPHBaseV2:
     @ti.func
     def enforce_boundary_3D_v1(self, particle_type:int):
         for p_i in ti.grouped(self.ps.x):
-            if self.ps.material[p_i] == particle_type:
+            if self.ps.is_dynamic(self.ps.material[p_i]):
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0, 0.0])
                 if pos[0] > self.ps.domain_size[0] - self.ps.padding:
