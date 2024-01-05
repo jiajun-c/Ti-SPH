@@ -102,3 +102,54 @@ class ParticleBase:
     
     def add_fluid_and_rigid(self):
         pass
+    
+    @ti.func
+    def add_particle(self, p, x, v, density, pressure, material, id):
+        # if p >= self.particle_max_num:
+            # print("error:", self.particle_num[None])
+        self.x[p] = x
+        self.v[p] = v
+        self.density[p] = density
+        self.pressure[p] = pressure
+        self.material[p] = material
+        self.object_id[p] = id
+        self.volume[p] = self.m_V0 # TODO: fluid volume need be compute later
+        self.mass[p] = self.volume[p]*self.density[p]
+
+    @ti.kernel
+    def add_particles(self, num: int,
+                    particle_position: ti.types.ndarray(),
+                    particle_velocity: ti.types.ndarray(),
+                    particle_density: ti.types.ndarray(),
+                    particle_pressure: ti.types.ndarray(),
+                    particle_material: ti.types.ndarray(),
+                    object_id: int):
+        print("add now", self.particle_num[None])
+        for i in range(num):
+            v = ti.Vector.zero(float, self.dim)
+            x = ti.Vector.zero(float, self.dim)
+            for j in ti.static(range(self.dim)):
+                v[j] = particle_velocity[i, j]
+                x[j] = particle_position[i, j]
+            self.add_particle(self.particle_num[None] + i, x, v,
+                            particle_density[i],
+                            particle_pressure[i],
+                            particle_material[i],
+                            object_id)
+        self.particle_num[None] += num
+        
+    @ti.func
+    def for_all_neighbors(self, p_i, task: ti.template(), ret: ti.template()):
+        """visit the particle p_i and 
+
+        Args:
+            p_i (_type_): _description_
+            task (ti.template): _description_
+            ret (ti.template): _description_
+        """
+        center_cell = self.pos_to_index(self.x[p_i])
+        for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+            grid_index = self.flatten_grid_index(center_cell + offset)
+            for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+                if p_i != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_length:
+                    task(p_i, p_j, ret)
