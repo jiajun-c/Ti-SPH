@@ -34,6 +34,7 @@ class ParticleBase:
         self.object_id = ti.field(dtype=ti.int32, shape=self.particle_max_num)
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.mass = ti.field(dtype=ti.f32, shape=self.particle_max_num) #
+        self.d_velocity = ti.field(self.dim, dtype=ti.f32, shape=self.particle_max_num)
         
         self.add_fluid_and_rigid() # compute the particle_max_num
         self.grid_size = self.support_length
