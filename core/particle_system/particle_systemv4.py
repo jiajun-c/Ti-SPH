@@ -105,7 +105,7 @@ class ParticleSystemV4:
             voxelized_points = self.load_rigid_body(rigid)
             particle_num = voxelized_points.shape[0]
             # print(self.particle_num[None])
-            rigid['partice_num'] = particle_num
+            rigid['particle_num'] = particle_num
             rigid['voxelized_points'] = voxelized_points
             material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
             # color = rigid['color']

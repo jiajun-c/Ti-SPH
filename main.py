@@ -1,6 +1,6 @@
 import taichi as ti
 import json
-from core.partice_system import partice_systemv2
+from core.particle_system import particle_systemv2
 from core.sph.wcsph import WCSPH
 ti.init(arch=ti.gpu)
 
@@ -9,7 +9,7 @@ if __name__ == "__main__":
         simulation_config = json.load(f)
         
     config = simulation_config['configuration']
-    ps = partice_systemv2.ParticleSystemV2((512, 512), simulation_config)
+    ps = particle_systemv2.ParticleSystemV2((512, 512), simulation_config)
     # add fluid and rigid
     ps.add_fluid_and_rigid()
     wcsph = WCSPH(ps)

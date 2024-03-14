@@ -1,6 +1,6 @@
 import taichi as ti
 import json
-from core.partice_system import partice_systemv4
+from core.particle_system import particle_systemv4
 from core.sph.wcsphv2 import WCSPHV2
 from utils.lines import getlines
 ti.init(arch=ti.cuda)
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     points, indices = getlines(simulation_config['configuration'])
     print(points)
     config = simulation_config['configuration']
-    ps = partice_systemv4.ParticleSystemV4(simulation_config)
+    ps = particle_systemv4.ParticleSystemV4(simulation_config)
     # add fluid and rigid
     # ps.add_fluid_and_rigid()
     wcsph = WCSPHV2(ps)

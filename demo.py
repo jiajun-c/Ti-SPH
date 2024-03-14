@@ -1,6 +1,6 @@
 import taichi as ti
 import numpy as np
-from core.partice_system.partice_system import ParticleSystem
+from core.particle_system.particle_system import ParticleSystem
 from core.sph.wcsph import WCSPH
 
 ti.init(arch=ti.gpu)

@@ -1,6 +1,6 @@
 import taichi as ti
 import numpy as np
-from core.partice_system.partice_systemv4 import ParticleSystemV4
+from core.particle_system.particle_systemv4 import ParticleSystemV4
 import core.const
 
 

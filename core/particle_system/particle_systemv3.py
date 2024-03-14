@@ -5,7 +5,7 @@ from functools import reduce
 
 
 @ti.data_oriented
-class ParticleSystemV2:
+class ParticleSystemV3:
     def __init__(self, res, simulation_config):
         self.res = res
         self.dim = len(res)
@@ -17,29 +17,30 @@ class ParticleSystemV2:
         self.material_boundary = 0
         self.material_fluid = 1
         self.simulation_config = simulation_config
-        # 粒子相关信息
+        # # 粒子相关信息
         self.particle_radius = 0.05  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V = 0.8 * self.particle_diameter ** self.dim # 粒子的体积
         self.particle_max_num = 2 ** 15
-        self.particle_max_num_per_cell = 100
-        self.particle_max_num_neighbor = 100
+        self.particle_max_num_per_cell = 1000
+        self.particle_max_num_neighbor = 1000
         self.particle_num = ti.field(int, shape=())
-        # 网格相关属性
+        # # 网格相关属性
         self.grid_size = self.support_radius
         self.grid_num = np.ceil(np.array(res) / self.grid_size).astype(int)
+        print("grid_name", self.grid_num)
         self.grid_particles_num = ti.field(int)
         self.grid_particles = ti.field(int)
         self.padding = self.grid_size
         # 模拟的配置
         self.config = self.simulation_config['configuration']
         
-        # 固体
+        # # 固体
         self.rigidBodiesConfig = self.simulation_config['rigidBodies']  # list
         self.fluidBlocksConfig = self.simulation_config['fluidBlocks']  # list
 
-        # Snode数据结构
+        # # Snode数据结构
         self.x = ti.Vector.field(self.dim, dtype=float)
         self.v = ti.Vector.field(self.dim, dtype=float)
         self.density = ti.field(dtype=float)
@@ -54,7 +55,7 @@ class ParticleSystemV2:
         self.particles_node.place(self.x, self.v, self.density, self.pressure, self.material, self.color, self.volume)
         self.particles_node.place(self.particle_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
-        self.particle_node.place(self.particle_neighbors)
+        self.particle_node.place(self.particle_neighbors)   
 
         index = ti.ij if self.dim == 2 else ti.ijk
         grid_node = ti.root.dense(index, self.grid_num)
@@ -89,36 +90,36 @@ class ParticleSystemV2:
         """
         
         # add rigid body
-        # for rigid in self.rigidBodiesConfig:
-        #     voxelized_points = self.load_rigid_body(rigid)
-        #     particle_num = voxelized_points.shape[0]
-        #     # print(self.particle_num[None])
-        #     # self.particle_num[None] += particle_num
-        #     rigid['partice_num'] = particle_num
-        #     rigid['voxelized_points'] = voxelized_points
-        #     # TODO: add the material type for the rigid body instead of the boundary material
-        #     material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
-        #     color = rigid['color']
-        #     if type(color[0]) == int:
-        #         color = [c / 255.0 for c in color]
-        #     color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
-        #     velocity = rigid['velocity']
-        #     velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
+        for rigid in self.rigidBodiesConfig:
+            voxelized_points = self.load_rigid_body(rigid)
+            particle_num = voxelized_points.shape[0]
+            # print(self.particle_num[None])
+            # self.particle_num[None] += particle_num
+            rigid['particle_num'] = particle_num
+            rigid['voxelized_points'] = voxelized_points
+            # TODO: add the material type for the rigid body instead of the boundary material
+            material = np.full((particle_num, ), self.material_boundary, dtype=np.int32)
+            color = rigid['color']
+            if type(color[0]) == int:
+                color = [c / 255.0 for c in color]
+            color  = np.tile(np.array(color, dtype=np.float32), (particle_num, 1))
+            velocity = rigid['velocity']
+            velocity = np.tile(np.array(velocity, dtype=np.float32), (particle_num, 1))
             
-        #     density = rigid['density']
-        #     # print(particle_num)
-        #     density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
+            density = rigid['density']
+            # print(particle_num)
+            density = np.full_like(np.zeros(particle_num), density if density is not None else 1000.)
 
-        #     pressure = np.full_like(np.zeros(particle_num), 0.)
+            pressure = np.full_like(np.zeros(particle_num), 0.)
 
-        #     positions = voxelized_points
-        #     self.add_particles(particle_num, 
-        #                     positions,
-        #                     velocity,
-        #                     density,
-        #                     pressure,
-        #                     material,
-        #                     color)
+            positions = voxelized_points
+            self.add_particles(particle_num, 
+                            positions,
+                            velocity,
+                            density,
+                            pressure,
+                            material,
+                            color)
             
         # add fluid blocks
         for fluid in self.fluidBlocksConfig:
@@ -127,7 +128,7 @@ class ParticleSystemV2:
             velocity = fluid['velocity']
             color = fluid['color']
             density = fluid['density']
-            cube_size = [end[0] - start[0], end[1] - start[1]]
+            cube_size = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
             self.add_cube(lower_corner=start, 
                         cube_size=cube_size, 
                         material= self.material_fluid,
@@ -185,18 +186,19 @@ class ParticleSystemV2:
                 continue
             center_cell = self.pos_to_index(self.x[p_i])
             cnt = 0
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 2)):
-                cell = center_cell + offset
-                if not self.is_valid_cell(cell):
-                    break
-                for j in range(self.grid_particles_num[cell]):
-                    p_j = self.grid_particles[cell, j]
-                    if p_j == p_i:
-                        continue
-                    if (self.x[p_i] - self.x[p_j]).norm() >= self.support_radius:
-                        continue
-                    self.particle_neighbors[p_i, cnt] = p_j
-                    cnt += 1
+            if self.dim == 3:
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    cell = center_cell + offset
+                    if not self.is_valid_cell(cell):
+                        break
+                    for j in range(self.grid_particles_num[cell]):
+                        p_j = self.grid_particles[cell, j]
+                        if p_j == p_i:
+                            continue
+                        if (self.x[p_i] - self.x[p_j]).norm() >= self.support_radius:
+                            continue
+                        self.particle_neighbors[p_i, cnt] = p_j
+                        cnt += 1
             self.particle_neighbors_num[p_i] = cnt
     @ti.func
     def for_all_neighbors(self, idx_i, task: ti.template(), ret: ti.template()):
@@ -207,7 +209,11 @@ class ParticleSystemV2:
     def allocate_particles_to_grid(self):
         for i in range(self.particle_num[None]):
             cell = self.pos_to_index(self.x[i])
+            if self.is_valid_cell(self.x[i]) == False:
+                continue
             offset = ti.atomic_add(self.grid_particles_num[cell], 1)
+            if offset >= 1000:
+                print("failed to allocate")
             self.grid_particles[cell, offset] = i
 
     def add_cube(self,
@@ -220,14 +226,13 @@ class ParticleSystemV2:
                 velocity=None):
 
         num_dim = []
-        print(self.dim)
         for i in range(self.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
                             self.particle_radius))
         num_new_particles = reduce(lambda x, y: x * y,
                                     [len(n) for n in num_dim])
-        assert self.particle_num[None] + num_new_particles <= self.particle_max_num
+        # assert self.particle_num[None] + num_new_particles <= self.particle_max_num
 
         positions = np.array(np.meshgrid(*num_dim,
                                         sparse=False,
