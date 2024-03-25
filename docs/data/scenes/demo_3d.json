@@ -1,4 +1,8 @@
 {
+	"host":
+	{
+		"hostname":["snode0", "snode1"]
+	},
 	"configuration": 
 	{
 		"dim": 3,
