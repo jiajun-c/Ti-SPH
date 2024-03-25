@@ -81,6 +81,7 @@ class ParticleSystemMPI(ParticleSystemBase):
         if self.gpu_node_rank < self.gpu_node_rank:
             reqright = self.comm.irecv(0, 22)
             self.right_ghost_num = reqright.wait()
+        self.grid_ids = ti.field(dtype=ti.i32, shape=self.particle_num)
         self.x = ti.Vector.field(self.dim, ti.f32, shape=self.particle_num)
         self.v = ti.Vector.field(self.dim, ti.f32, shape=self.particle_num)
         self.density = ti.field(dtype=ti.f32, shape=self.particle_num)
@@ -114,6 +115,8 @@ class ParticleSystemMPI(ParticleSystemBase):
             self.volume_right_ghost.from_numpy(volume[-self.right_ghost_num:])
             self.material_right_ghost.from_numpy(material[-self.right_ghost_num:])
             self.mass_right_ghost.from_numpy(mass[-self.right_ghost_num:])
+        
+        # 区域内粒子的属性信息初始化
         self.x.from_numpy(x[self.left_ghost_num:-self.right_ghost_num])
         self.density.from_numpy(density[self.left_ghost_num:-self.right_ghost_num])
         self.v.from_numpy(v[self.left_ghost_num:-self.right_ghost_num])
@@ -122,7 +125,18 @@ class ParticleSystemMPI(ParticleSystemBase):
         self.material.from_numpy(material[self.left_ghost_num:-self.right_ghost_num])
         self.mass.from_numpy(mass[self.left_ghost_num:-self.right_ghost_num])
         self.volume.from_numpy(volume[self.left_ghost_num:-self.right_ghost_num])
-        
+
+        # 进行排序时的buffer
+        self.grid_ids_buffer = ti.field(dtype=ti.i32, shape=self.particle_num)
+        self.x_buffer = ti.Vector.field(self.dim, ti.f32, shape=self.particle_num)
+        self.v_buffer = ti.Vector.field(self.dim, ti.f32, shape=self.particle_num)
+        self.density_buffer = ti.field(dtype=ti.f32, shape=self.particle_num)
+        self.pressure_buffer = ti.field(dtype=ti.f32, shape=self.particle_num)
+        self.material_buffer = ti.field(dtype=ti.i32, shape=self.particle_num)
+        self.color_buffer = ti.field(dtype=ti.i32, shape=self.particle_num)
+        self.mass_buffer = ti.field(dtype=ti.f32, shape=self.particle_num) # 单个粒子的质量
+        self.volume_buffer = ti.field(dtype=ti.f32, shape=self.particle_num)
+
         req1 = self.comm.irecv(0, 2)
         x = req1.wait()
         
@@ -155,3 +169,36 @@ class ParticleSystemMPI(ParticleSystemBase):
         self.volume.from_numpy(volume)
         
         
+    @ti.kernel
+    def resort(self):
+        for i in range(self.particle_max_num):
+            j = self.particle_max_num - 1 -i
+            offset = 0
+            if self.grid_ids[j] - 1 >= 0:
+                offset = self.grid_particles_num[self.grid_ids[j] - 1]
+            self.paritcle_index_temp[j] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[j]], 1) - 1 + offset
+
+        for i in ti.grouped(self.grid_ids):
+            newIndex = self.paritcle_index_temp[i]
+            self.grid_ids_buffer[newIndex] = self.grid_ids[i]
+            self.m_buffer[newIndex] = self.m[i]
+            self.v_buffer[newIndex] = self.v[i]
+            self.x_buffer[newIndex] = self.x[i]
+            self.density_buffer[newIndex] = self.density[i]
+            self.pressure_buffer[newIndex] = self.pressure[i]
+            self.material_buffer[newIndex] = self.material[i]
+            self.color_buffer[newIndex] = self.color[i]
+            self.mass_buffer[newIndex] = self.mass[i]
+            self.volume_buffer[newIndex] = self.volume[i]
+            
+        for i in ti.grouped(self.x):
+            self.grid_ids[i] = self.grid_ids_buffer[i]
+            self.m[i] = self.m_buffer[i]
+            self.v[i] = self.v_buffer[i]
+            self.x[i] = self.x_buffer[i]
+            self.density[i] = self.density_buffer[i]
+            self.pressure[i] = self.pressure_buffer[i]
+            self.material[i] = self.material_buffer[i]
+            self.color[i] = self.color_buffer[i]
+            self.mass[i] = self.mass_buffer[i]
+            self.volume[i] = self.volume_buffer[i]
