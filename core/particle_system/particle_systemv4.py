@@ -306,28 +306,6 @@ class ParticleSystemV4:
         for i in range(self.particle_num[None]):
             for j in ti.static(range(self.dim)):
                 np_arr[i, j] = src_arr[i][j]
-            
-    @ti.kernel
-    def search_neighbors(self):
-        for p_i in range(self.particle_num[None]):
-            if self.material[p_i] == self.material_boundary:
-                continue
-            center_cell = self.pos_to_index(self.x[p_i])
-            cnt = 0
-            if self.dim == 3:
-                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                    cell = center_cell + offset
-                    if not self.is_valid_cell(cell):
-                        break
-                    for j in range(self.grid_particles_num[cell]):
-                        p_j = self.grid_particles[cell, j]
-                        if p_j == p_i:
-                            continue
-                        if (self.x[p_i] - self.x[p_j]).norm() >= self.support_radius:
-                            continue
-                        self.particle_neighbors[p_i, cnt] = p_j
-                        cnt += 1
-            self.particle_neighbors_num[p_i] = cnt
 
     @ti.func
     def for_all_neighbors(self, p_i, task: ti.template(), ret: ti.template()):

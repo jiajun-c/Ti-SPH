@@ -98,7 +98,7 @@ class WCSPHV2(SPHBaseV2):
             if self.ps.material[p_i] == self.ps.material_fluid:
                 self.ps.v[p_i] += self.dt[None] * self.d_velocity[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
-
+ 
     def substep(self):
         self.compute_densities()
         self.compute_non_pressure_force()
