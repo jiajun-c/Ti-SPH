@@ -26,6 +26,8 @@ class ParticleSystemBase:
         
         self.grid_size = self.support_radius
         self.grid_num = np.ceil(self.domin_size/self.grid_size).astype(np.int32)
+        # self.grid_particles_num = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
+        # self.grid_particles_num_temp = ti.field(int, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
         # 一个切片的网格数目
         self.slice_size = self.grid_num[2]*self.grid_num[1]
         self.particle_num = 0
@@ -40,4 +42,7 @@ class ParticleSystemBase:
     def flatten_grid_index(self, grid_index):
         return grid_index[0]*self.grid_num[1]*self.grid_num[2] + grid_index[1]*self.grid_num[2] + grid_index[2]
     
+    @ti.func
+    def get_flatten_grid_index(self, pos):
+        return self.flatten_grid_index(self.pos_to_index(pos))
     

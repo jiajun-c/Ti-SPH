@@ -34,12 +34,20 @@ class ParticleSystemMPI(ParticleSystemBase):
         self.domain_start = np.array(self.configuration['domainStart'])
         self.domain_end = np.array(self.configuration['domainEnd'])
         self.domain_size = self.domain_end - self.domain_start
-        
         self.material_boundary = 0
         self.material_fluid = 1
         
         self.fluid = self.simulation_config['fluidBlocks']
         self.rigid = self.simulation_config['rigidBodies']
+        self.local_grid_num = np.array([calc_ncols_from_rank(self.gpu_node_rank, self.gpu_node_size, self.grid_num[0]), self.grid_num[1], self.grid_num[2]])
+        self.local_grid_particle_num = ti.field(ti.i32, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
+        self.local_grid_particle_num_temp = ti.field(ti.i32, shape=int(reduce(lambda x, y : x*y, self.grid_num)))
+        
+        self.ghost_left_grid_particle_num = ti.field(ti.i32, shape=self.slice_size)
+        self.ghost_left_grid_particle_num_temp = ti.field(ti.i32, shape=self.slice_size)
+
+        self.ghost_right_grid_particle_num = ti.field(ti.i32, shape=self.slice_size)
+        self.ghost_right_grid_particle_num_temp = ti.field(ti.i32, shape=self.slice_size)
         
         self.particle_radius = self.configuration['particleRadius']
         self.particle_diameter = 2 * self.particle_radius
@@ -96,13 +104,15 @@ class ParticleSystemMPI(ParticleSystemBase):
         self.material_left_ghost = ti.field(dtype=ti.i32, shape=self.left_ghost_num)
         self.mass_left_ghost = ti.field(dtype=ti.f32, shape=self.left_ghost_num) # 单个粒子的质量
         self.volume_left_ghost = ti.field(dtype=ti.f32, shape=self.left_ghost_num)
+        self.ghost_left_grid_ids = ti.field(dtype=ti.f32, shape=self.left_ghost_num)
         
         self.x_right_ghost = ti.Vector.field(self.dim, ti.f32, shape=self.right_ghost_num)
         self.density_right_ghost = ti.field(dtype=ti.f32, shape=self.right_ghost_num)
         self.material_right_ghost = ti.field(dtype=ti.i32, shape=self.right_ghost_num)
         self.mass_right_ghost = ti.field(dtype=ti.f32, shape=self.right_ghost_num) # 单个粒子的质量
         self.volume_right_ghost = ti.field(dtype=ti.f32, shape=self.right_ghost_num)
-        
+        self.ghost_right_grid_ids = ti.field(dtype=ti.f32, shape=self.left_ghost_num)
+
         if self.gpu_node_rank > 0:
             self.x_left_ghost.from_numpy(x[:self.left_ghost_num])
             self.density_left_ghost.from_numpy(density[:self.left_ghost_num])
@@ -168,15 +178,51 @@ class ParticleSystemMPI(ParticleSystemBase):
         volume = req8.wait()
         self.volume.from_numpy(volume)
         
+    @ti.kernel
+    def update_inner_grid_id(self):
+        # 更新内部粒子的网格id
+        for i in ti.grouped(self.local_grid_particle_num):
+            self.local_grid_particle_num[i] = 0
+        for i in ti.grouped(self.x):
+            grid_index = self.get_flatten_grid_index(self.x[i])
+            local_grid_index = grid_index - self.start_grid_index
+            self.grid_ids[i] = grid_index
+            ti.atomic_add(self.local_grid_particle_num[local_grid_index], 1)
+        for i in ti.grouped(self.local_grid_particle_num):
+            self.local_grid_particle_num_temp[i] = self.local_grid_num[i]
         
     @ti.kernel
+    def update_ghost_grid_id(self):
+        for i in ti.grouped(self.slice_size):
+            self.ghost_left_grid_particle_num[i] = 0
+            self.ghost_right_grid_particle_num[i] = 0
+        # 更新左侧的幽灵粒子
+        for i in ti.grouped(self.x_left_ghost):
+            grid_index = self.get_flatten_grid_index(self.x_left_ghost[i])
+            local_grid_index = grid_index - self.left_ghost_grid_start_index
+            self.ghost_left_grid_ids[i] = grid_index
+            ti.atomic_add(self.ghost_left_grid_particle_num[local_grid_index], 1)
+        # 更新右侧的幽灵粒子
+        for i in ti.grouped(self.x_right_ghost):
+            grid_index = self.get_flatten_grid_index(self.x_right_ghost[i])
+            local_grid_index = grid_index - self.right_ghost_grid_start_index
+            self.ghost_right_grid_ids[i] = grid_index
+            ti.atomic_add(self.ghost_right_grid_particle_num[local_grid_index], 1)
+        for i in ti.grouped(self.slice_size):
+            self.ghost_right_grid_particle_num_temp[i] = self.ghost_right_grid_particle_num[i]    
+            self.ghost_left_grid_particle_num_temp[i] = self.ghost_left_grid_particle_num[i]    
+
+    @ti.kernel
     def resort(self):
+        # 对区域内粒子进行排序
         for i in range(self.particle_max_num):
             j = self.particle_max_num - 1 -i
             offset = 0
-            if self.grid_ids[j] - 1 >= 0:
-                offset = self.grid_particles_num[self.grid_ids[j] - 1]
-            self.paritcle_index_temp[j] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[j]], 1) - 1 + offset
+            # 得到本地的网格id
+            local_grid_id = self.grid_ids[j] - self.start_grid_index
+            if local_grid_id - 1 >= 0:
+                offset = self.grid_particles_num[local_grid_id - 1]
+            self.paritcle_index_temp[j] = ti.atomic_sub(self.grid_particles_num_temp[local_grid_id], 1) - 1 + offset
 
         for i in ti.grouped(self.grid_ids):
             newIndex = self.paritcle_index_temp[i]
@@ -202,3 +248,5 @@ class ParticleSystemMPI(ParticleSystemBase):
             self.color[i] = self.color_buffer[i]
             self.mass[i] = self.mass_buffer[i]
             self.volume[i] = self.volume_buffer[i]
+        # 对幽灵粒子进行排序
+        
