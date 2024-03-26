@@ -248,10 +248,26 @@ class ParticleSystemV4:
             self.color[i] = self.color_buffer[i]
             self.mass[i] = self.mass_buffer[i]
             self.volume[i] = self.volume_buffer[i]
-            
+    
+    @ti.kernel
+    def split(self):
+        for i in range(self.particle_num[None]):
+            self.x_temp[i] = self.x[i]
+        for i in range(self.particle_num[None]):
+            self.x[i] = self.x_temp[i]
+        
     def update(self):
         """After sph substep, the particles system should be updated
         """
+        self.x_temp = ti.Vector.field(self.dim, dtype=ti.f32, shape=self.particle_max_num) # the particle position
+        self.v_temp = ti.Vector.field(self.dim, dtype=ti.f32, shape=self.particle_max_num)
+        self.volume_temp = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.x_temp = ti.Vector.field(self.dim, dtype=ti.f32, shape=self.particle_max_num) # the particle position
+        self.density_temp = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.pressure_temp = ti.field(dtype=ti.f32, shape=self.particle_max_num)
+        self.material_temp = ti.field(dtype=ti.i32, shape=self.particle_max_num)
+        self.color_temp = ti.Vector.field(3, dtype=ti.int32, shape=self.particle_max_num)
+        self.split()
         self.update_gird_id()
         self.prefix_sum_executor.run(self.grid_particles_num)
         self.resort()
